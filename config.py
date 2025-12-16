@@ -16,6 +16,7 @@ class GenerationMode(Enum):
     """Modos de generación disponibles"""
     REFERENCE = "reference"  # Copia exacta del estilo de referencias
     CREATIVE = "creative"    # Ambiente contextual basado en producto/mensaje
+    SCRATCH = "scratch"      # Sin imagen de producto, genera todo desde el mensaje
 
 
 # ============================================================================

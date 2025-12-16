@@ -26,12 +26,14 @@ from prompts import (
     ANALYZE_REFERENCES_PROMPT,
     ANALYZE_PRODUCT_BASIC_PROMPT,
     ANALYZE_PRODUCT_CONTEXT_PROMPT,
+    ANALYZE_MESSAGE_PROMPT,
     REFERENCES_INSTRUCTION,
     LOGO_INSTRUCTION,
     PRODUCT_INSTRUCTION,
     get_user_intent_prompt,
     get_reference_prompt,
     get_creative_prompt,
+    get_scratch_prompt,
 )
 
 load_dotenv()
@@ -146,12 +148,22 @@ class AdaptiveAnalyzer:
         )
         return self.client.analyze_text(prompt)
     
+    def analyze_message_for_scratch(self, message: str, company: CompanyConfig) -> str:
+        """Analiza el mensaje para generar contenido desde cero (sin producto)"""
+        prompt = ANALYZE_MESSAGE_PROMPT.format(
+            message=message,
+            company_name=company.name,
+            company_description=company.description
+        )
+        return self.client.analyze_text(prompt)
+    
     def analyze_all(
         self, 
         request: str, 
         company: CompanyConfig, 
         product_image: Optional[Image.Image],
-        include_creative_context: bool = False
+        include_creative_context: bool = False,
+        is_scratch_mode: bool = False
     ) -> Dict[str, str]:
         """
         Ejecuta TODOS los análisis necesarios.
@@ -159,7 +171,8 @@ class AdaptiveAnalyzer:
         results = {
             "user_intent": "",
             "product_info": "",
-            "creative_context": ""
+            "creative_context": "",
+            "message_analysis": ""
         }
         
         # 1. Analizar intención del usuario
@@ -174,6 +187,11 @@ class AdaptiveAnalyzer:
             if include_creative_context:
                 print("   → Generando contexto creativo...")
                 results["creative_context"] = self.analyze_product_for_context(product_image)
+        
+        # 3. Si es modo scratch (sin producto), analizar mensaje para visual
+        if is_scratch_mode and not product_image:
+            print("   → Analizando mensaje para contenido visual...")
+            results["message_analysis"] = self.analyze_message_for_scratch(request, company)
         
         return results
 
@@ -478,6 +496,61 @@ class InstagramPostGenerator:
         
         return results
     
+    def create_scratch_post(
+        self,
+        user_request: str,
+        output_path: str = "post_scratch.png"
+    ) -> Dict[str, Any]:
+        """
+        Genera un post desde CERO sin imagen de producto.
+        Ideal para: anuncios, cierres, tormentas, celebraciones, etc.
+        """
+        print("\n" + "="*60)
+        print("🎨 GENERANDO POST - Modo: SCRATCH (sin producto)")
+        print("="*60)
+        
+        # 1. Análisis del mensaje (sin producto)
+        print("\n📊 Analizando mensaje...")
+        analyses = self.analyzer.analyze_all(
+            user_request, 
+            self.company, 
+            product_image=None,
+            include_creative_context=False,
+            is_scratch_mode=True
+        )
+        print("   ✓ Análisis completado")
+        
+        # 2. Construir prompt SCRATCH
+        prompt = get_scratch_prompt(
+            self.style_guide,
+            analyses["message_analysis"],
+            self.company.name,
+            self.company.color_palette,
+            user_request,
+            analyses["user_intent"]
+        )
+        
+        # 3. Construir partes (sin producto)
+        parts = self._build_parts_base(product_image=None)
+        parts.append(types.Part.from_text(text=f"\n{prompt}"))
+        
+        # 4. Generar
+        print(f"\n🚀 Generando imagen...")
+        generated = self.client.generate_image(parts)
+        
+        if generated:
+            output_dir = os.path.dirname(output_path)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+            
+            generated.save(output_path, quality=self.config.output_quality)
+            print(f"\n✅ POST GUARDADO: {output_path}")
+            print(f"   Tamaño: {generated.size[0]}x{generated.size[1]}")
+            
+            return {"status": "success", "path": output_path, "mode": "scratch"}
+        
+        return {"status": "error", "message": "Falló la generación"}
+    
     def _build_parts_base(self, product_image: Optional[Image.Image]) -> List[types.Part]:
         """Construye las partes base (sin prompt) para reutilizar"""
         parts = []
@@ -545,6 +618,24 @@ class InstagramAI:
         """Genera AMBAS versiones de forma optimizada."""
         return self.generator.create_both_optimized(request, product_image, output_folder)
     
+    def create_scratch(
+        self,
+        request: str,
+        output: str = "post_scratch.png"
+    ) -> Dict[str, Any]:
+        """
+        Genera un post desde CERO sin imagen de producto.
+        
+        Ideal para:
+        - "Mañana no abrimos por la tormenta tropical Melissa"
+        - "¡Feliz Navidad a todos nuestros clientes!"
+        - "Nuevo horario: Lunes a Viernes 8am-6pm"
+        - "¡Gracias por 10 años de confianza!"
+        
+        El sistema analiza el mensaje y genera contenido visual apropiado.
+        """
+        return self.generator.create_scratch_post(request, output)
+    
     def get_style_guide(self) -> str:
         """Retorna la guía de estilo"""
         return self.generator.style_guide
@@ -570,20 +661,34 @@ if __name__ == "__main__":
         logo_path="assets/logo.png"
     )
     
-    # Configuración del sistema (opcional - usa defaults si no se especifica)
-    # config = SystemConfig(
-    #     max_references=6,  # Usar menos referencias para mayor velocidad
-    #     cache_style_guide=True
-    # )
-    
     # Crear generador
     ai = InstagramAI(company, "referencias")
     
-    # Generar AMBAS versiones (optimizado)
-    results = ai.create_both_versions(
-        request="NUESTRO REFLECTOR LED SOLAR DE 40W ES EL MEJOR DEL MERCADO",
-        product_image="fotos/luces.jpg",
-        output_folder="posts"
+    # ================================================================
+    # MODO SCRATCH: Sin imagen de producto, genera todo desde el mensaje
+    # ================================================================
+    result = ai.create_scratch(
+        request="Feliz dia de la restauracion Dominicana, laboraremos de 8am a 1pm",
+        output="posts/post_scratch.png"
     )
     
-    print("\n🎉 ¡Listo! Compara ambas versiones y elige tu favorita.")
+    print("\n🎉 ¡Listo!")
+    
+    # ================================================================
+    # También puedes usar los otros modos:
+    # ================================================================
+    # 
+    # CON producto (ambas versiones):
+    # results = ai.create_both_versions(
+    #     request="10% DE DESCUENTO EN PINTURAS",
+    #     product_image="fotos/pintura.png",
+    #     output_folder="posts"
+    # )
+    # 
+    # Solo una versión:
+    # result = ai.create_post(
+    #     request="Nuevo producto disponible",
+    #     product_image="fotos/producto.png",
+    #     output="post.png",
+    #     mode="creative"  # o "reference"
+    # )

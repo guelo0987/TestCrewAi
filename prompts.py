@@ -376,3 +376,159 @@ Place this logo ONCE in one corner. No duplicates.
 ══════════════════════════════════════════════════"""
 
 PRODUCT_INSTRUCTION = "\n══ PRODUCT IMAGE - Feature this prominently, keep recognizable ══"
+
+
+# ============================================================================
+# PROMPT: ANÁLISIS DE MENSAJE (PARA MODO SCRATCH)
+# ============================================================================
+
+ANALYZE_MESSAGE_PROMPT = """Analyze this message to create the perfect visual post:
+
+MESSAGE: "{message}"
+COMPANY: {company_name}
+ABOUT: {company_description}
+
+Your job is to determine EXACTLY what visual elements should be generated.
+Be SPECIFIC and CREATIVE - no generic suggestions.
+
+═══════════════════════════════════════════════════════════════
+ANALYSIS REQUIRED:
+═══════════════════════════════════════════════════════════════
+
+1. MESSAGE ESSENCE:
+   - What is the CORE message? (1 sentence)
+   - What emotion should viewers feel?
+
+2. VISUAL CONCEPT (BE SPECIFIC!):
+   - Describe the EXACT imagery that represents this message
+   - What should be the main visual element?
+   - What background/setting makes sense?
+   - What mood/atmosphere? (lighting, colors, style)
+   
+   Example thinking:
+   - "Virgen de las Mercedes" → beautiful virgin statue with child, 
+     heavenly rays, clouds, celestial atmosphere
+   - "Cerrado por inventario" → warehouse with boxes, organized shelves,
+     professional counting scene
+   - "Nuevo servicio de llaves" → shiny keys, key cutting machine,
+     professional locksmith imagery
+   - "Llegaron los taladros DeWalt" → impressive power tools display,
+     workshop setting, professional lighting
+
+3. COMPOSITION SUGGESTIONS:
+   - Where should the main visual element be?
+   - What style? (realistic, illustrated, photographic)
+   - What lighting? (dramatic, soft, bright, warm)
+
+4. TEXT TO INCLUDE:
+   - Extract the key text from the user's message
+   - Keep it minimal - what are the essential words?
+
+Be CREATIVE and SPECIFIC. Your visual description will be used to generate the image."""
+
+
+# ============================================================================
+# PROMPT: GENERACIÓN MODO SCRATCH
+# ============================================================================
+
+def get_scratch_prompt(style_guide: str, message_analysis: str, company_name: str,
+                       colors: List[str], user_request: str, user_intent: str) -> str:
+    """Genera el prompt para modo SCRATCH (sin imagen de producto)"""
+    return f"""CREATE A BEAUTIFUL INSTAGRAM ANNOUNCEMENT POST (1:1 Square)
+
+══════════════════════════════════════════════════════════════════════
+MODE: SCRATCH - CLEAN & BEAUTIFUL ANNOUNCEMENT
+══════════════════════════════════════════════════════════════════════
+
+Create a STUNNING visual post. The IMAGE is the star - text is secondary.
+Think like the Christmas post example: beautiful imagery, minimal text.
+
+══════════════════════════════════════════════════════════════════════
+📝 TEXT RULES (READ CAREFULLY!)
+══════════════════════════════════════════════════════════════════════
+
+USER'S EXACT MESSAGE: "{user_request}"
+
+EXTRACT AND USE ONLY:
+1. MAIN MESSAGE: The celebration/announcement (e.g., "Feliz Día de la Virgen de las Mercedes")
+2. SCHEDULE INFO: Only if provided (e.g., "8am a 1pm")
+3. COMPANY NAME: "{company_name}" as signature
+
+⛔ TEXT ERRORS TO AVOID:
+- DO NOT duplicate words (like "8am a 8am a 1pm")
+- DO NOT break words incorrectly (like "merc:des" or "de le les")
+- DO NOT add random punctuation in the middle of words
+- PROOFREAD the text before rendering - every word must be complete and correct
+- Copy the user's text EXACTLY as written
+
+🚨 SPELLING CHECK:
+- "Mercedes" not "merc:des" or "mercides"
+- "de las" not "de le les" or "de la les"
+- Double-check EVERY word is spelled correctly
+
+══════════════════════════════════════════════════════════════════════
+🎨 VISUAL DESIGN (MOST IMPORTANT!)
+══════════════════════════════════════════════════════════════════════
+
+CREATE A BEAUTIFUL, IMMERSIVE VISUAL BASED ON THE MESSAGE CONTEXT.
+
+The MESSAGE ANALYSIS below tells you EXACTLY what type of visual to create.
+Follow that analysis - it was specifically generated for THIS message.
+
+RULES:
+- The visual should IMMEDIATELY communicate the message
+- Create imagery that represents the THEME of the message
+- Use relevant visual elements that make sense for this specific topic
+- The visual should be so good that minimal text is needed
+- Think: what image would perfectly represent this message?
+
+DO NOT use generic stock-photo looks. Create something SPECIFIC to this message.
+
+THE VISUAL SHOULD BE SO BEAUTIFUL THAT MINIMAL TEXT IS NEEDED.
+
+══════════════════════════════════════════════════════════════════════
+🖼️ LAYOUT & COMPOSITION
+══════════════════════════════════════════════════════════════════════
+
+- Image goes EDGE TO EDGE (no border, no frame, no margins)
+- Text overlaid on the beautiful visual
+- Logo in ONE corner only (use the logo I provide)
+- Clean, uncluttered composition
+- Text should have good contrast against background
+
+══════════════════════════════════════════════════════════════════════
+BRAND:
+══════════════════════════════════════════════════════════════════════
+Company: {company_name}
+Colors: {', '.join(colors)}
+- Use brand colors for text accents/outlines
+
+══════════════════════════════════════════════════════════════════════
+⛔ ABSOLUTELY DO NOT:
+══════════════════════════════════════════════════════════════════════
+1. ❌ NO BORDER or FRAME around the image - goes edge to edge
+2. ❌ NO duplicated text or words
+3. ❌ NO broken/split words with wrong characters
+4. ❌ NO placeholder text like [DATE] or [TIME]
+5. ❌ NO random icons floating (especially top corners)
+6. ❌ NO invented information not in user's message
+7. ❌ NO spelling mistakes - proofread everything
+
+✅ DO:
+1. ✅ Beautiful, immersive visual that fills the entire square
+2. ✅ Minimal, clean text - let the image speak
+3. ✅ Correct spelling of EVERY word
+4. ✅ Logo appears ONCE only
+5. ✅ Professional, polished result
+
+══════════════════════════════════════════════════════════════════════
+QUALITY CHECK BEFORE GENERATING:
+══════════════════════════════════════════════════════════════════════
+□ Is the visual beautiful and immersive?
+□ Does the image go edge-to-edge with NO border?
+□ Is every word spelled correctly?
+□ Is there NO duplicated text?
+□ Does the logo appear only ONCE?
+□ Is the text minimal and clean?
+
+Create something BEAUTIFUL that {company_name} would be proud to post."""
