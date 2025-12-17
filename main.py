@@ -598,7 +598,7 @@ class InstagramPostGenerator:
             feedback
         )
         
-        # 4. Construir partes (incluye el post original como referencia adicional)
+        # 4. Construir partes - NO incluir la imagen original para forzar cambios
         parts = []
         
         # Referencias de estilo
@@ -607,9 +607,13 @@ class InstagramPostGenerator:
             for ref_img in self.reference_images:
                 parts.append(self._pil_to_part(ref_img))
         
-        # Post original (para que Gemini vea qué debe mejorar)
-        parts.append(types.Part.from_text(text="\n══ POST ORIGINAL (create a DIFFERENT and BETTER version) ══"))
-        parts.append(self._pil_to_part(existing_post))
+        # NO incluimos la imagen original como visual - esto causaba que Gemini la copiara
+        # En su lugar, usamos solo el análisis textual (post_analysis) en el prompt
+        parts.append(types.Part.from_text(text="""
+══ IMPORTANT: CREATE A COMPLETELY DIFFERENT DESIGN ══
+Do NOT recreate the same layout. The analysis below describes what TO CHANGE.
+Use a DIFFERENT background, DIFFERENT layout structure, DIFFERENT visual approach.
+"""))
         
         # Logo
         if self.logo_image:
@@ -732,25 +736,7 @@ class InstagramAI:
         output: str = "post_regenerated.png",
         feedback: str = ""
     ) -> Dict[str, Any]:
-        """
-        Regenera un post existente creando una versión mejorada.
         
-        El sistema analiza el post original, identifica qué funciona y qué no,
-        y genera una versión DIFERENTE y MEJOR.
-        
-        Args:
-            existing_post: Ruta al post que se quiere regenerar
-            output: Ruta de salida para el nuevo post
-            feedback: Comentarios sobre qué mejorar (ej: "no me gustó el fondo", 
-                     "el texto está muy pequeño", "quiero más color")
-        
-        Ejemplo:
-            result = ai.regenerate(
-                existing_post="posts/post_creative.png",
-                output="posts/post_v2.png",
-                feedback="No me gustó el fondo, quiero algo más limpio"
-            )
-        """
         return self.generator.regenerate_post(existing_post, output, feedback)
     
     def get_style_guide(self) -> str:
@@ -797,8 +783,8 @@ if __name__ == "__main__":
     # 
     # CON producto (ambas versiones):
     # results = ai.create_both_versions(
-    #     request="Nuestra aspiradora inalambrica total de 20v y 0.7l de capacidad",
-    #     product_image="fotos/aspiradora.png",
+    #     request="Tinaco Hercules, disponible en 210GL y 265GL",
+    #     product_image="fotos/tinaco.png",
     #     output_folder="posts"
     # )
     # 
@@ -813,8 +799,9 @@ if __name__ == "__main__":
     # ================================================================
     # REGENERAR un post existente:
     # ================================================================
+    # Regenerar con los cambios al código - ahora SÍ debería generar algo diferente
     result = ai.regenerate(
-        existing_post="posts/post_v2.png",
-        output="posts/post_v3.png",
-        feedback="Me encanto el post no cambies nada, solo quitale el marco naranja que tiene"
+        existing_post="posts/post_creative.png",
+        output="posts/post_v12.png",
+        feedback=""
     )
