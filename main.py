@@ -28,6 +28,7 @@ from prompts import (
     ANALYZE_PRODUCT_CONTEXT_PROMPT,
     ANALYZE_MESSAGE_PROMPT,
     ANALYZE_POST_FOR_REGENERATION_PROMPT,
+    ANALYZE_MULTIPLE_PRODUCTS_PROMPT,
     REFERENCES_INSTRUCTION,
     LOGO_INSTRUCTION,
     PRODUCT_INSTRUCTION,
@@ -36,6 +37,7 @@ from prompts import (
     get_creative_prompt,
     get_scratch_prompt,
     get_regeneration_prompt,
+    get_multi_product_prompt,
 )
 
 load_dotenv()
@@ -162,6 +164,12 @@ class AdaptiveAnalyzer:
     def analyze_post_for_regeneration(self, post_image: Image.Image) -> str:
         """Analiza un post existente para regenerarlo"""
         return self.client.analyze_with_images(ANALYZE_POST_FOR_REGENERATION_PROMPT, [post_image])
+    
+    def analyze_multiple_products(self, product_images: List[Image.Image]) -> str:
+        """Analiza múltiples productos para crear un post cohesivo"""
+        num_products = len(product_images)
+        prompt = ANALYZE_MULTIPLE_PRODUCTS_PROMPT.format(num_products=num_products)
+        return self.client.analyze_with_images(prompt, product_images)
     
     def analyze_all(
         self, 
@@ -641,6 +649,121 @@ class InstagramPostGenerator:
         
         return {"status": "error", "message": "Falló la regeneración"}
     
+    def create_multi_product_post(
+        self,
+        user_request: str,
+        product_image_paths: List[str],
+        output_path: str = "post_multi.png"
+    ) -> Dict[str, Any]:
+        """
+        Crea un post con múltiples productos (máximo 3) integrados naturalmente.
+        
+        Args:
+            user_request: Mensaje/solicitud del usuario
+            product_image_paths: Lista de rutas a imágenes de productos (máx 3)
+            output_path: Ruta de salida para el post
+        """
+        print("\n" + "="*60)
+        print(f"🎨 GENERANDO POST MULTI-PRODUCTO ({len(product_image_paths)} productos)")
+        print("="*60)
+        
+        # 1. Validar número de productos
+        if len(product_image_paths) < 2:
+            return {"status": "error", "message": "Se requieren al menos 2 productos"}
+        if len(product_image_paths) > 3:
+            print("⚠️ Máximo 3 productos permitidos. Usando los primeros 3.")
+            product_image_paths = product_image_paths[:3]
+        
+        # 2. Cargar imágenes de productos
+        product_images = []
+        for path in product_image_paths:
+            if os.path.exists(path):
+                img = Image.open(path)
+                if img.mode in ('RGBA', 'P'):
+                    img = img.convert('RGB')
+                product_images.append(img)
+                print(f"   ✓ Producto cargado: {path}")
+            else:
+                print(f"   ⚠️ No encontrado: {path}")
+        
+        if len(product_images) < 2:
+            return {"status": "error", "message": "Se requieren al menos 2 productos válidos"}
+        
+        num_products = len(product_images)
+        
+        # 3. Análisis
+        print("\n📊 Analizando...")
+        
+        # Analizar intención del usuario
+        print("   → Analizando intención...")
+        user_intent = self.analyzer.analyze_user_intent(user_request, self.company)
+        
+        # Analizar múltiples productos
+        print(f"   → Analizando {num_products} productos para composición cohesiva...")
+        products_analysis = self.analyzer.analyze_multiple_products(product_images)
+        
+        print("   ✓ Análisis completado")
+        
+        # 4. Construir prompt
+        prompt = get_multi_product_prompt(
+            self.style_guide,
+            products_analysis,
+            self.company.name,
+            self.company.color_palette,
+            user_request,
+            user_intent,
+            num_products
+        )
+        
+        # 5. Construir partes
+        parts = []
+        
+        # Referencias de estilo
+        if self.reference_images:
+            parts.append(types.Part.from_text(text=REFERENCES_INSTRUCTION))
+            for ref_img in self.reference_images:
+                parts.append(self._pil_to_part(ref_img))
+        
+        # Logo
+        if self.logo_image:
+            parts.append(types.Part.from_text(text=LOGO_INSTRUCTION))
+            parts.append(self._pil_to_part(self.logo_image))
+        
+        # Múltiples productos con instrucción especial
+        parts.append(types.Part.from_text(text=f"""
+══ {num_products} PRODUCT IMAGES - Integrate ALL naturally into ONE cohesive scene ══
+These products should look like they were photographed TOGETHER, not collaged.
+Create a unified composition where all products belong in the same visual world.
+"""))
+        for i, prod_img in enumerate(product_images, 1):
+            parts.append(types.Part.from_text(text=f"Product {i}:"))
+            parts.append(self._pil_to_part(prod_img))
+        
+        # Prompt de generación
+        parts.append(types.Part.from_text(text=f"\n{prompt}"))
+        
+        # 6. Generar
+        print(f"\n🚀 Generando post con {num_products} productos...")
+        generated = self.client.generate_image(parts)
+        
+        if generated:
+            output_dir = os.path.dirname(output_path)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+            
+            generated.save(output_path, quality=self.config.output_quality)
+            print(f"\n✅ POST GUARDADO: {output_path}")
+            print(f"   Tamaño: {generated.size[0]}x{generated.size[1]}")
+            
+            return {
+                "status": "success", 
+                "path": output_path, 
+                "mode": "multi_product",
+                "num_products": num_products
+            }
+        
+        return {"status": "error", "message": "Falló la generación"}
+    
     def _build_parts_base(self, product_image: Optional[Image.Image]) -> List[types.Part]:
         """Construye las partes base (sin prompt) para reutilizar"""
         parts = []
@@ -753,6 +876,36 @@ class InstagramAI:
         """
         return self.generator.regenerate_post(existing_post, output, feedback)
     
+    def create_multi_product(
+        self,
+        request: str,
+        product_images: List[str],
+        output: str = "post_multi.png"
+    ) -> Dict[str, Any]:
+        """
+        Crea un post con múltiples productos (2-3) integrados naturalmente.
+        
+        Los productos se muestran en una composición COHESIVA, no como un collage.
+        Se ven como si fueran fotografiados juntos, complementándose naturalmente.
+        
+        Args:
+            request: Mensaje/solicitud del usuario
+            product_images: Lista de rutas a imágenes de productos (2-3 máximo)
+            output: Ruta de salida para el post
+        
+        Ejemplo:
+            result = ai.create_multi_product(
+                request="Combo de pintura: brocha, rodillo y pintura",
+                product_images=[
+                    "fotos/brocha.png",
+                    "fotos/rodillo.png",
+                    "fotos/pintura.png"
+                ],
+                output="posts/post_combo.png"
+            )
+        """
+        return self.generator.create_multi_product_post(request, product_images, output)
+    
     def get_style_guide(self) -> str:
         """Retorna la guía de estilo"""
         return self.generator.style_guide
@@ -814,7 +967,20 @@ if __name__ == "__main__":
     # REGENERAR un post existente:
     # ================================================================
     result = ai.regenerate(
-        existing_post="posts/post_v2.png",
-        output="posts/post_v3.png",
-        feedback="Me encanto el post no cambies nada, solo quitale el marco naranja que tiene"
+        existing_post="posts/post_creative.png",
+        output="posts/post_v6.png",
+        feedback=""
     )
+    #
+    # ================================================================
+    # MULTI-PRODUCTO: Varios productos en un post cohesivo
+    # ================================================================
+    # result = ai.create_multi_product(
+    #     request="Todo lo que necesites para tu obra la Gigante lo tiene",
+    #     product_images=[
+    #         "fotos/block.png",
+    #         "fotos/varilla.png",
+    #         "fotos/cemento.png"
+    #     ],
+    #     output="posts/post_kit.png"
+    # )

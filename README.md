@@ -271,6 +271,48 @@ result = ai.regenerate(
 
 ---
 
+### 5. Modo MULTI-PRODUCT
+**Propósito**: Crea un post con múltiples productos (2-3) integrados naturalmente
+
+```python
+result = ai.create_multi_product(
+    request="Combo de pintura profesional",
+    product_images=[
+        "fotos/brocha.png",
+        "fotos/rodillo.png",
+        "fotos/pintura.png"
+    ],
+    output="posts/post_combo.png"
+)
+```
+
+**Cómo funciona**:
+1. Analiza todos los productos para entender cómo se relacionan
+2. Determina cuál debe ser el "héroe" y cuáles los "supporting"
+3. Crea una composición COHESIVA donde los productos se ven naturales juntos
+4. NO es un collage - es una escena unificada
+
+**Características clave**:
+- Los productos se ven como fotografiados JUNTOS, no pegados
+- Contexto visual unificado que conecta todos los productos
+- Iluminación y sombras consistentes
+- Máximo 3 productos para mantener la calidad
+
+**Ejemplos de uso**:
+- Kit de herramientas (taladro + brocas + estuche)
+- Combo de pintura (pintura + brocha + rodillo)
+- Set de iluminación (lámpara + foco + cable)
+- Bundle promocional de cualquier tipo
+
+**Parámetros**:
+| Parámetro | Tipo | Descripción |
+|-----------|------|-------------|
+| request | str | Mensaje/solicitud del usuario |
+| product_images | List[str] | Lista de rutas a imágenes (2-3 máx) |
+| output | str | Ruta de salida para el post |
+
+---
+
 ## 📦 Instalación
 
 ### 1. Clonar repositorio
@@ -428,7 +470,8 @@ TestCrewAi/
 │   ├── get_reference_prompt()      # Prompt modo reference
 │   ├── get_creative_prompt()       # Prompt modo creative
 │   ├── get_scratch_prompt()        # Prompt modo scratch
-│   └── get_regeneration_prompt()   # Prompt modo regeneración
+│   ├── get_regeneration_prompt()   # Prompt modo regeneración
+│   └── get_multi_product_prompt()  # Prompt modo multi-producto
 │
 ├── referencias/            # Imágenes de referencia
 │   ├── ref1.png
@@ -526,6 +569,28 @@ result = ai.regenerate(
     existing_post="posts/post_creative.png",
     output="posts/post_v2.png",
     feedback="Quiero un fondo más limpio y el texto más grande"
+)
+```
+
+---
+
+#### `create_multi_product(request, product_images, output)`
+Crea un post con múltiples productos integrados naturalmente.
+
+| Parámetro | Tipo | Descripción |
+|-----------|------|-------------|
+| request | str | Mensaje/solicitud del usuario |
+| product_images | List[str] | Lista de rutas a imágenes (2-3 máx) |
+| output | str | Ruta de salida para el post |
+
+**Retorna**: `Dict[str, Any]` con status, path, mode y num_products
+
+**Ejemplo**:
+```python
+result = ai.create_multi_product(
+    request="Kit completo de pintura profesional",
+    product_images=["fotos/pintura.png", "fotos/brocha.png", "fotos/rodillo.png"],
+    output="posts/post_kit.png"
 )
 ```
 

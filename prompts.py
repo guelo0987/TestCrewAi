@@ -212,18 +212,20 @@ Product Info:
 - DO NOT add decorative elements like spirals that you see in references
 
 ⚠️ LOGO RULE (VERY IMPORTANT):
-- Use ONLY the logo I provide labeled "COMPANY LOGO" - this is for {company_name}
-- The logos you see in references (FERREMIX, TOLEDO, etc.) are OTHER companies
-- IGNORE all logos in the reference images completely
-- Show the provided {company_name} logo EXACTLY ONE TIME
+- Use the EXACT logo image I provide - DO NOT redraw or recreate it
+- DO NOT change the logo colors (keep original colors exactly)
+- DO NOT modify the logo shape in any way
+- COPY the logo EXACTLY as provided - pixel for pixel
+- Place it ONCE in one corner
+- IGNORE all logos in reference images - they are OTHER companies
 
 ══════════════════════════════════════════════════════════════════════
 FINAL REQUIREMENT:
 ══════════════════════════════════════════════════════════════════════
 Copy the STYLE from references (colors, layout, text effects, composition).
-But use ONLY the logo I provide, not any logos from the references.
+Use the EXACT logo I provide - do NOT recreate or modify it.
 The image should go EDGE TO EDGE with NO border or frame.
-The {company_name} logo appears ONLY ONCE."""
+The {company_name} logo appears ONLY ONCE, exactly as provided."""
 
 
 # ============================================================================
@@ -318,17 +320,18 @@ Product Info:
 - DO NOT add decorative elements like spirals from other brands
 
 ⚠️ LOGO RULE (VERY IMPORTANT):
-- Use ONLY the logo I provide labeled "COMPANY LOGO"
-- The logos you see in references (FERREMIX, TOLEDO, etc.) are OTHER companies
-- IGNORE all logos in the reference images completely  
-- Show the provided company logo EXACTLY ONE TIME in one corner
-- NO duplicates, NO logos from references
+- Use the EXACT logo image I provide - DO NOT redraw or recreate it
+- DO NOT change the logo colors (keep original colors exactly)
+- DO NOT modify the logo shape in any way
+- COPY the logo EXACTLY as provided - pixel for pixel
+- Place it ONCE in one corner
+- IGNORE all logos in reference images - they are OTHER companies
 
 ══════════════════════════════════════════════════════════════════════
 FINAL REQUIREMENTS:
 ══════════════════════════════════════════════════════════════════════
 1. ✅ Match reference TEXT STYLE (outlines, shadows, effects)
-2. ✅ Match reference LOGO TREATMENT (position, background shape)
+2. ✅ Use EXACT logo provided (do NOT modify colors or shape)
 3. ✅ Match reference BACKGROUND APPROACH (textures, colors)
 4. ✅ Match reference PROMOTIONAL STYLE (banners, badges)
 5. ✅ ADD creative contextual elements for this specific product
@@ -358,22 +361,50 @@ These images define the EXACT visual style you must replicate:
 - Double-check spelling of all text
 
 ⚠️ LOGO RULES (VERY IMPORTANT):
-- Use ONLY the company logo I provide (labeled "COMPANY LOGO")
-- Do NOT copy any logos you see in the reference images
-- The references show OTHER companies - IGNORE their logos completely
-- Show the provided logo EXACTLY ONE TIME in one corner
-- Do NOT add "DESLIZA", swipe icons, or other UI elements from references
+- Use the EXACT logo image I provide - do NOT recreate or redraw it
+- Do NOT change the logo COLORS in any way (keep exact original colors)
+- Do NOT change the logo SHAPE in any way
+- COPY the logo EXACTLY as provided - pixel for pixel
+- Place it ONCE in one corner
+- IGNORE all logos in reference images - they are OTHER companies
+
+⛔ DO NOT COPY FROM REFERENCES:
+- Do NOT copy dates like "Válido hasta 31 de diciembre" from references
+- Do NOT copy specific offers/discounts unless requested by user
+- Do NOT copy "DESLIZA", swipe icons, or UI elements
+- Do NOT copy product names/brands from references
+- ONLY copy the VISUAL STYLE, not the actual content
 
 The references are for STYLE only (colors, layout, text effects, composition).
-NEVER copy the actual logos, brand names, or UI elements you see in them.
+NEVER copy actual content (dates, offers, logos) from the references.
 """
 
 LOGO_INSTRUCTION = """
-══ COMPANY LOGO - THIS IS THE ONLY LOGO TO USE ══
-Use THIS logo only. IGNORE all logos in the reference images.
-The references show other companies (FERREMIX, TOLEDO, etc.) - do NOT use their logos.
-Place this logo ONCE in one corner. No duplicates.
-══════════════════════════════════════════════════"""
+══════════════════════════════════════════════════════════════════════
+⚠️⚠️⚠️ COMPANY LOGO - COPY EXACTLY AS PROVIDED ⚠️⚠️⚠️
+══════════════════════════════════════════════════════════════════════
+
+THIS IS THE EXACT LOGO IMAGE. EMBED IT DIRECTLY WITHOUT ANY CHANGES.
+
+🚨 MANDATORY - DO EXACTLY THIS:
+1. EMBED this exact logo image into the post
+2. Place it in ONE corner (preferably bottom-right or top-right)
+3. The logo should be clearly visible but not too large
+
+⛔ ABSOLUTELY DO NOT:
+- Put the logo inside a CIRCLE or any shape
+- Add any BORDER or FRAME around the logo
+- Add any BACKGROUND behind the logo (no circles, squares, ovals)
+- Change ANY colors of the logo
+- Redraw, recreate, or "improve" the logo
+- Make it look different in any way
+- Add decorative elements around the logo
+
+The logo is TRANSPARENT/on white - keep it that way.
+Just place the logo as-is, directly on the post background.
+
+⚠️ THE LOGO HAS NO CIRCLE AROUND IT - DO NOT ADD ONE
+══════════════════════════════════════════════════════════════════════"""
 
 PRODUCT_INSTRUCTION = "\n══ PRODUCT IMAGE - Feature this prominently, keep recognizable ══"
 
@@ -617,18 +648,29 @@ ANALYSIS OF PREVIOUS POST:
 REGENERATION RULES:
 ══════════════════════════════════════════════════════════════════════
 
-1. KEEP the same core MESSAGE and PRODUCT
-2. KEEP the brand colors and logo
-3. CHANGE the visual approach - make it DIFFERENT
-4. FIX any issues identified in the analysis
-5. Make it MORE PROFESSIONAL and POLISHED
+✅ KEEP EXACTLY:
+1. The SAME products - do NOT change how they look
+2. The SAME core message/text
+3. The brand colors and logo (use EXACT logo provided)
+4. All products must remain recognizable and accurate
 
-Ideas for making it DIFFERENT:
-- Try a different layout (if it was diagonal, try centered)
-- Try a different background approach (if it was solid, try textured/photo)
-- Try different text placement
-- Add or remove visual elements
-- Change the mood/energy (if it was busy, try minimal)
+🔄 CHANGE/IMPROVE:
+1. The visual approach/layout
+2. The background style
+3. Text placement and effects
+4. Overall composition
+5. Fix any issues identified
+
+⛔ DO NOT:
+1. DO NOT change the appearance of the products
+2. DO NOT add dates like "Válido hasta..." unless in original
+3. DO NOT invent offers, discounts, or promotions
+4. DO NOT add information that wasn't in the original post
+5. DO NOT copy dates/offers from reference images
+6. DO NOT simplify or modify the product images
+7. DO NOT add any BORDER or FRAME around the entire image
+8. DO NOT put the logo inside a CIRCLE or any shape
+9. DO NOT add backgrounds/shapes behind the logo
 
 ══════════════════════════════════════════════════════════════════════
 STYLE GUIDE (follow this):
@@ -644,15 +686,25 @@ Colors: {', '.join(colors)}
 ══════════════════════════════════════════════════════════════════════
 ⛔ CRITICAL RULES:
 ══════════════════════════════════════════════════════════════════════
-1. ❌ NO BORDER or FRAME around the image
+1. ❌ NO BORDER or FRAME around the entire image - it must go edge-to-edge
 2. ❌ NO duplicated logos - ONLY ONE logo
 3. ❌ NO spelling mistakes
 4. ❌ NO duplicated text
-5. ❌ NO placeholders like [DATE] or [TIME]
-6. ✅ Image goes edge-to-edge
-7. ✅ Logo appears EXACTLY ONCE
-8. ✅ Professional, polished result
-9. ✅ DIFFERENT from the previous version
+5. ❌ NO dates like "Válido hasta..." unless in original
+6. ❌ NO invented offers/discounts
+7. ❌ DO NOT modify how the products look
+8. ✅ Image goes edge-to-edge (NO margin or border)
+9. ✅ Logo appears EXACTLY ONCE
+10. ✅ Professional, polished result
+11. ✅ DIFFERENT layout but SAME content as original
+
+⚠️⚠️⚠️ LOGO RULE (VERY IMPORTANT):
+- EMBED the exact logo image I provided directly into the post
+- Place it in a corner WITHOUT any circle, shape, or background behind it
+- DO NOT put the logo inside a circle
+- DO NOT add any background shape behind the logo
+- DO NOT change logo colors or shape
+- The logo should sit directly on the post background
 
 ══════════════════════════════════════════════════════════════════════
 GOAL:
@@ -660,4 +712,198 @@ GOAL:
 Create a post that is NOTICEABLY DIFFERENT and BETTER than the previous one.
 The user should see this and think "YES, this is much better!"
 
-Keep the same message, but present it in a fresh, improved way."""
+Keep the SAME message and products, but present them in a fresh, improved way.
+DO NOT add dates, offers, or information that wasn't in the original."""
+
+
+# ============================================================================
+# PROMPT: ANÁLISIS DE MÚLTIPLES PRODUCTOS
+# ============================================================================
+
+ANALYZE_MULTIPLE_PRODUCTS_PROMPT = """Analyze these product images to create a COHESIVE promotional post.
+
+You are looking at {num_products} products that need to be showcased TOGETHER in ONE post.
+
+═══════════════════════════════════════════════════════════════
+FOR EACH PRODUCT, IDENTIFY:
+═══════════════════════════════════════════════════════════════
+
+1. PRODUCT TYPE: What is each product? (brand, category, type)
+2. COLORS: Main colors of each product
+3. RELATIONSHIP: How do these products relate to each other?
+   - Same category? (all tools, all paints, all electrical)
+   - Complementary? (drill + bits, paint + brush)
+   - Same brand/line?
+   - Bundle/kit?
+
+═══════════════════════════════════════════════════════════════
+COMPOSITION STRATEGY:
+═══════════════════════════════════════════════════════════════
+
+Suggest how to arrange {num_products} products NATURALLY:
+
+- Which product should be the HERO (main focus)?
+- Which products should be SUPPORTING?
+- What arrangement looks natural? (grouped, staggered, overlapping slightly)
+- What visual elements CONNECT them? (same background, shared context, related tools)
+
+AVOID:
+- Products looking randomly placed
+- Forced or unnatural groupings
+- One product dominating too much
+- Products competing for attention
+
+═══════════════════════════════════════════════════════════════
+UNIFIED CONTEXT SUGGESTION:
+═══════════════════════════════════════════════════════════════
+
+What SINGLE context/background would make ALL products feel at home?
+- Example: Multiple tools → workshop setting
+- Example: Paint + brush + roller → painting scene with splashes
+- Example: Electrical products → modern home/lighting context
+
+The context should make the products feel like they BELONG TOGETHER naturally.
+
+Be specific about the visual approach that will make these products look cohesive."""
+
+
+# ============================================================================
+# PROMPT: GENERACIÓN CON MÚLTIPLES PRODUCTOS
+# ============================================================================
+
+def get_multi_product_prompt(style_guide: str, products_analysis: str, company_name: str,
+                              colors: List[str], user_request: str, user_intent: str,
+                              num_products: int) -> str:
+    """Genera el prompt para posts con múltiples productos (máximo 3)"""
+    return f"""CREATE A PROMOTIONAL INSTAGRAM POST WITH {num_products} PRODUCTS (1:1 Square)
+
+══════════════════════════════════════════════════════════════════════
+MODE: MULTI-PRODUCT - COHESIVE SHOWCASE
+══════════════════════════════════════════════════════════════════════
+
+Your task is to create a post featuring {num_products} products that look like they 
+NATURALLY BELONG TOGETHER. This is NOT a collage - it's a unified composition.
+
+══════════════════════════════════════════════════════════════════════
+⚠️ CRITICAL: NATURAL INTEGRATION (MOST IMPORTANT!)
+══════════════════════════════════════════════════════════════════════
+
+The products must look like they were PHOTOGRAPHED TOGETHER, not pasted:
+
+✅ DO:
+- Create a UNIFIED scene where all products fit naturally
+- Use a SINGLE cohesive background/context for all products
+- Make products interact visually (slight overlaps, shared shadows, grouped arrangement)
+- Vary sizes to create depth (some closer, some further)
+- Use consistent lighting across all products
+- Let products share the same "world" or setting
+
+❌ DON'T:
+- Place products in separate boxes or sections
+- Make a grid or collage layout
+- Have products floating randomly with no connection
+- Give each product its own separate background
+- Make all products the same size in a row
+
+══════════════════════════════════════════════════════════════════════
+PRODUCTS ANALYSIS:
+══════════════════════════════════════════════════════════════════════
+{products_analysis}
+
+══════════════════════════════════════════════════════════════════════
+COMPOSITION GUIDELINES:
+══════════════════════════════════════════════════════════════════════
+
+For {num_products} products:
+
+ARRANGEMENT OPTIONS:
+- Hero + Supporting: One product larger/front, others smaller/behind
+- Triangle/Grouped: Products arranged in a natural group
+- Staggered depth: Products at different depths, creating dimension
+- Action scene: Products in use context together
+
+VISUAL HARMONY:
+- Same lighting direction on all products
+- Consistent shadow style
+- Colors that complement each other
+- Shared contextual elements (same surface, same background)
+
+══════════════════════════════════════════════════════════════════════
+STYLE GUIDE (follow this):
+══════════════════════════════════════════════════════════════════════
+{style_guide}
+
+══════════════════════════════════════════════════════════════════════
+BRAND:
+══════════════════════════════════════════════════════════════════════
+Company: {company_name}
+Colors: {', '.join(colors)}
+- Use {colors[0]} for accents and highlights
+- Use {colors[1]} for backgrounds or primary elements
+- Use {colors[2]} for text
+
+══════════════════════════════════════════════════════════════════════
+CONTENT:
+══════════════════════════════════════════════════════════════════════
+Request: "{user_request}"
+
+Intent Analysis:
+{user_intent}
+
+══════════════════════════════════════════════════════════════════════
+📝 TEXT & CREATIVITY:
+══════════════════════════════════════════════════════════════════════
+Create ENGAGING text that sells:
+
+1. MAIN HEADLINE: Use the user's message creatively
+2. SUPPORTING TEXT: Add a compelling slogan or CTA if appropriate
+   - Example: "¡Construye con los mejores!"
+   - Example: "Calidad que resiste"
+   - Example: "Todo en un solo lugar"
+
+The text should:
+- Be catchy and memorable
+- Match the brand voice
+- Have proper text effects (outlines, shadows) from references
+- Be properly spelled (double-check everything!)
+
+⛔ DO NOT add:
+- Dates like "Válido hasta..." (unless user requested)
+- Made-up discounts or offers
+- Information not in the user's request
+
+══════════════════════════════════════════════════════════════════════
+⛔ CRITICAL RULES:
+══════════════════════════════════════════════════════════════════════
+1. ❌ NO BORDER or FRAME around the image
+2. ❌ NO grid or collage layout - this is ONE unified scene
+3. ❌ NO separate backgrounds for each product
+4. ❌ NO spelling mistakes
+5. ❌ NO dates/offers unless user requested them
+6. ✅ ALL {num_products} products visible and recognizable
+7. ✅ Products look naturally arranged TOGETHER
+8. ✅ Single cohesive background/context
+9. ✅ Professional, polished composition
+10. ✅ Text with proper outline/effects matching references
+
+⚠️⚠️⚠️ LOGO RULE (CRITICAL):
+- EMBED the EXACT logo image I provided directly on the post
+- Place it in a corner (bottom-right or top-right preferred)
+- DO NOT put the logo inside a CIRCLE or any shape
+- DO NOT add any background, circle, or shape BEHIND the logo
+- DO NOT change the logo colors
+- DO NOT redraw or recreate the logo
+- The logo should sit DIRECTLY on the post background - NO decorative frame around it
+
+══════════════════════════════════════════════════════════════════════
+QUALITY CHECK:
+══════════════════════════════════════════════════════════════════════
+□ Do the products look like they belong in the same photo?
+□ Is there a natural visual flow between products?
+□ Does the composition feel balanced, not cluttered?
+□ Is every product clearly visible and recognizable?
+□ Is the logo EXACTLY as provided? (NO circle around it, original colors)
+□ Does it look professional, not like a cheap collage?
+□ Is the image edge-to-edge with NO border?
+
+Create a BEAUTIFUL, COHESIVE showcase that {company_name} would be proud to post."""
