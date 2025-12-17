@@ -452,7 +452,7 @@ USER'S EXACT MESSAGE: "{user_request}"
 EXTRACT AND USE ONLY:
 1. MAIN MESSAGE: The celebration/announcement (e.g., "Feliz Día de la Virgen de las Mercedes")
 2. SCHEDULE INFO: Only if provided (e.g., "8am a 1pm")
-3. COMPANY NAME: "{company_name}" as signature
+3. COMPANY NAME: "{company_name}"
 
 ⛔ TEXT ERRORS TO AVOID:
 - DO NOT duplicate words (like "8am a 8am a 1pm")
@@ -532,3 +532,132 @@ QUALITY CHECK BEFORE GENERATING:
 □ Is the text minimal and clean?
 
 Create something BEAUTIFUL that {company_name} would be proud to post."""
+
+
+# ============================================================================
+# PROMPT: ANÁLISIS DE POST EXISTENTE (PARA REGENERACIÓN)
+# ============================================================================
+
+ANALYZE_POST_FOR_REGENERATION_PROMPT = """Analyze this existing post that the user wants to REGENERATE with improvements.
+
+Your job is to extract EVERYTHING about this post so we can create a BETTER version.
+
+═══════════════════════════════════════════════════════════════
+EXTRACT THE FOLLOWING:
+═══════════════════════════════════════════════════════════════
+
+1. MAIN MESSAGE/TEXT:
+   - What is the headline text?
+   - What is the secondary text?
+   - Any prices, percentages, or offers shown?
+   - Any dates or schedules mentioned?
+
+2. PRODUCT/SUBJECT:
+   - What product or subject is featured?
+   - Brand name if visible?
+   - Product type and characteristics?
+
+3. VISUAL ELEMENTS:
+   - What is the background? (color, photo, texture)
+   - What visual elements are present? (splashes, effects, icons)
+   - Layout structure? (diagonal, centered, split)
+
+4. WHAT WORKS WELL:
+   - What elements should be KEPT in the new version?
+   - What visual choices are effective?
+
+5. WHAT COULD BE IMPROVED:
+   - Any issues with the current design?
+   - Text problems? (spelling, placement, readability)
+   - Logo issues? (duplicated, wrong position)
+   - Visual issues? (cluttered, boring, off-brand)
+   - Any borders or frames that shouldn't be there?
+
+6. SUGGESTIONS FOR REGENERATION:
+   - How could the next version be DIFFERENT but BETTER?
+   - What alternative visual approach could work?
+   - What should definitely CHANGE?
+
+Be SPECIFIC and DETAILED. This analysis will be used to generate an improved version."""
+
+
+# ============================================================================
+# PROMPT: REGENERACIÓN DE POST
+# ============================================================================
+
+def get_regeneration_prompt(style_guide: str, post_analysis: str, company_name: str,
+                            colors: List[str], feedback: str = "") -> str:
+    """Genera el prompt para regenerar un post existente"""
+    feedback_section = ""
+    if feedback:
+        feedback_section = f"""
+══════════════════════════════════════════════════════════════════════
+USER FEEDBACK (IMPORTANT - Address these issues):
+══════════════════════════════════════════════════════════════════════
+{feedback}
+
+Make sure the new version FIXES these specific issues mentioned by the user.
+"""
+    
+    return f"""REGENERATE THIS POST - CREATE A BETTER VERSION
+
+══════════════════════════════════════════════════════════════════════
+MODE: REGENERATION - IMPROVE THE PREVIOUS POST
+══════════════════════════════════════════════════════════════════════
+
+The user was not satisfied with the previous post. Create a NEW, BETTER version
+that keeps what worked but IMPROVES what didn't.
+
+══════════════════════════════════════════════════════════════════════
+ANALYSIS OF PREVIOUS POST:
+══════════════════════════════════════════════════════════════════════
+{post_analysis}
+{feedback_section}
+══════════════════════════════════════════════════════════════════════
+REGENERATION RULES:
+══════════════════════════════════════════════════════════════════════
+
+1. KEEP the same core MESSAGE and PRODUCT
+2. KEEP the brand colors and logo
+3. CHANGE the visual approach - make it DIFFERENT
+4. FIX any issues identified in the analysis
+5. Make it MORE PROFESSIONAL and POLISHED
+
+Ideas for making it DIFFERENT:
+- Try a different layout (if it was diagonal, try centered)
+- Try a different background approach (if it was solid, try textured/photo)
+- Try different text placement
+- Add or remove visual elements
+- Change the mood/energy (if it was busy, try minimal)
+
+══════════════════════════════════════════════════════════════════════
+STYLE GUIDE (follow this):
+══════════════════════════════════════════════════════════════════════
+{style_guide}
+
+══════════════════════════════════════════════════════════════════════
+BRAND:
+══════════════════════════════════════════════════════════════════════
+Company: {company_name}
+Colors: {', '.join(colors)}
+
+══════════════════════════════════════════════════════════════════════
+⛔ CRITICAL RULES:
+══════════════════════════════════════════════════════════════════════
+1. ❌ NO BORDER or FRAME around the image
+2. ❌ NO duplicated logos - ONLY ONE logo
+3. ❌ NO spelling mistakes
+4. ❌ NO duplicated text
+5. ❌ NO placeholders like [DATE] or [TIME]
+6. ✅ Image goes edge-to-edge
+7. ✅ Logo appears EXACTLY ONCE
+8. ✅ Professional, polished result
+9. ✅ DIFFERENT from the previous version
+
+══════════════════════════════════════════════════════════════════════
+GOAL:
+══════════════════════════════════════════════════════════════════════
+Create a post that is NOTICEABLY DIFFERENT and BETTER than the previous one.
+The user should see this and think "YES, this is much better!"
+
+Keep the same message, but present it in a fresh, improved way."""

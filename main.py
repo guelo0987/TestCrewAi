@@ -27,6 +27,7 @@ from prompts import (
     ANALYZE_PRODUCT_BASIC_PROMPT,
     ANALYZE_PRODUCT_CONTEXT_PROMPT,
     ANALYZE_MESSAGE_PROMPT,
+    ANALYZE_POST_FOR_REGENERATION_PROMPT,
     REFERENCES_INSTRUCTION,
     LOGO_INSTRUCTION,
     PRODUCT_INSTRUCTION,
@@ -34,6 +35,7 @@ from prompts import (
     get_reference_prompt,
     get_creative_prompt,
     get_scratch_prompt,
+    get_regeneration_prompt,
 )
 
 load_dotenv()
@@ -156,6 +158,10 @@ class AdaptiveAnalyzer:
             company_description=company.description
         )
         return self.client.analyze_text(prompt)
+    
+    def analyze_post_for_regeneration(self, post_image: Image.Image) -> str:
+        """Analiza un post existente para regenerarlo"""
+        return self.client.analyze_with_images(ANALYZE_POST_FOR_REGENERATION_PROMPT, [post_image])
     
     def analyze_all(
         self, 
@@ -551,6 +557,90 @@ class InstagramPostGenerator:
         
         return {"status": "error", "message": "Falló la generación"}
     
+    def regenerate_post(
+        self,
+        existing_post_path: str,
+        output_path: str = "post_regenerated.png",
+        feedback: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Regenera un post existente creando una versión mejorada.
+        
+        Args:
+            existing_post_path: Ruta al post que se quiere regenerar
+            output_path: Ruta de salida para el nuevo post
+            feedback: Comentarios del usuario sobre qué mejorar
+        """
+        print("\n" + "="*60)
+        print("🔄 REGENERANDO POST")
+        print("="*60)
+        
+        # 1. Cargar el post existente
+        if not os.path.exists(existing_post_path):
+            return {"status": "error", "message": f"Post no encontrado: {existing_post_path}"}
+        
+        existing_post = Image.open(existing_post_path)
+        if existing_post.mode in ('RGBA', 'P'):
+            existing_post = existing_post.convert('RGB')
+        print(f"   ✓ Post cargado: {existing_post_path}")
+        
+        # 2. Analizar el post existente
+        print("\n📊 Analizando post existente...")
+        post_analysis = self.analyzer.analyze_post_for_regeneration(existing_post)
+        print("   ✓ Análisis completado")
+        
+        # 3. Construir prompt de regeneración
+        prompt = get_regeneration_prompt(
+            self.style_guide,
+            post_analysis,
+            self.company.name,
+            self.company.color_palette,
+            feedback
+        )
+        
+        # 4. Construir partes (incluye el post original como referencia adicional)
+        parts = []
+        
+        # Referencias de estilo
+        if self.reference_images:
+            parts.append(types.Part.from_text(text=REFERENCES_INSTRUCTION))
+            for ref_img in self.reference_images:
+                parts.append(self._pil_to_part(ref_img))
+        
+        # Post original (para que Gemini vea qué debe mejorar)
+        parts.append(types.Part.from_text(text="\n══ POST ORIGINAL (create a DIFFERENT and BETTER version) ══"))
+        parts.append(self._pil_to_part(existing_post))
+        
+        # Logo
+        if self.logo_image:
+            parts.append(types.Part.from_text(text=LOGO_INSTRUCTION))
+            parts.append(self._pil_to_part(self.logo_image))
+        
+        # Prompt de regeneración
+        parts.append(types.Part.from_text(text=f"\n{prompt}"))
+        
+        # 6. Generar
+        print(f"\n🚀 Generando nueva versión...")
+        generated = self.client.generate_image(parts)
+        
+        if generated:
+            output_dir = os.path.dirname(output_path)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+            
+            generated.save(output_path, quality=self.config.output_quality)
+            print(f"\n✅ POST REGENERADO: {output_path}")
+            print(f"   Tamaño: {generated.size[0]}x{generated.size[1]}")
+            
+            return {
+                "status": "success", 
+                "path": output_path, 
+                "mode": "regeneration",
+                "original": existing_post_path
+            }
+        
+        return {"status": "error", "message": "Falló la regeneración"}
+    
     def _build_parts_base(self, product_image: Optional[Image.Image]) -> List[types.Part]:
         """Construye las partes base (sin prompt) para reutilizar"""
         parts = []
@@ -636,6 +726,33 @@ class InstagramAI:
         """
         return self.generator.create_scratch_post(request, output)
     
+    def regenerate(
+        self,
+        existing_post: str,
+        output: str = "post_regenerated.png",
+        feedback: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Regenera un post existente creando una versión mejorada.
+        
+        El sistema analiza el post original, identifica qué funciona y qué no,
+        y genera una versión DIFERENTE y MEJOR.
+        
+        Args:
+            existing_post: Ruta al post que se quiere regenerar
+            output: Ruta de salida para el nuevo post
+            feedback: Comentarios sobre qué mejorar (ej: "no me gustó el fondo", 
+                     "el texto está muy pequeño", "quiero más color")
+        
+        Ejemplo:
+            result = ai.regenerate(
+                existing_post="posts/post_creative.png",
+                output="posts/post_v2.png",
+                feedback="No me gustó el fondo, quiero algo más limpio"
+            )
+        """
+        return self.generator.regenerate_post(existing_post, output, feedback)
+    
     def get_style_guide(self) -> str:
         """Retorna la guía de estilo"""
         return self.generator.style_guide
@@ -667,10 +784,10 @@ if __name__ == "__main__":
     # ================================================================
     # MODO SCRATCH: Sin imagen de producto, genera todo desde el mensaje
     # ================================================================
-    result = ai.create_scratch(
-        request="Feliz dia de la restauracion Dominicana, laboraremos de 8am a 1pm",
-        output="posts/post_scratch.png"
-    )
+    # result = ai.create_scratch(
+    #     request="Feliz dia de la restauracion Dominicana, laboraremos de 8am a 1pm",
+    #     output="posts/post_scratch.png"
+    # )
     
     print("\n🎉 ¡Listo!")
     
@@ -680,8 +797,8 @@ if __name__ == "__main__":
     # 
     # CON producto (ambas versiones):
     # results = ai.create_both_versions(
-    #     request="10% DE DESCUENTO EN PINTURAS",
-    #     product_image="fotos/pintura.png",
+    #     request="Nuestra aspiradora inalambrica total de 20v y 0.7l de capacidad",
+    #     product_image="fotos/aspiradora.png",
     #     output_folder="posts"
     # )
     # 
@@ -692,3 +809,12 @@ if __name__ == "__main__":
     #     output="post.png",
     #     mode="creative"  # o "reference"
     # )
+    #
+    # ================================================================
+    # REGENERAR un post existente:
+    # ================================================================
+    result = ai.regenerate(
+        existing_post="posts/post_v2.png",
+        output="posts/post_v3.png",
+        feedback="Me encanto el post no cambies nada, solo quitale el marco naranja que tiene"
+    )
