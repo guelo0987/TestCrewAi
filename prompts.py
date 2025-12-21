@@ -661,3 +661,466 @@ Create a post that is NOTICEABLY DIFFERENT and BETTER than the previous one.
 The user should see this and think "YES, this is much better!"
 
 Keep the same message, but present it in a fresh, improved way."""
+
+
+# ============================================================================
+# PROMPT: ANÁLISIS DE MÚLTIPLES PRODUCTOS
+# ============================================================================
+
+ANALYZE_MULTIPLE_PRODUCTS_PROMPT = """Analyze these {num_products} product images for a MULTI-PRODUCT promotional post.
+
+Your job is to understand each product AND determine how they should be presented TOGETHER.
+
+═══════════════════════════════════════════════════════════════
+FOR EACH PRODUCT, IDENTIFY:
+═══════════════════════════════════════════════════════════════
+
+1. PRODUCT IDENTITY:
+   - What is this product? (brand, type, variant)
+   - Main colors of the product/packaging
+   - Shape and orientation (tall, wide, square, circular)
+   - Relative size compared to other products
+
+2. VISUAL CHARACTERISTICS:
+   - Dominant colors that could clash or complement others
+   - Transparency or reflective elements
+   - Text/labels on packaging that should remain visible
+
+═══════════════════════════════════════════════════════════════
+MULTI-PRODUCT INTEGRATION ANALYSIS:
+═══════════════════════════════════════════════════════════════
+
+3. PRODUCT RELATIONSHIPS:
+   - Are these products from the SAME CATEGORY? (all paints, all tools, etc.)
+   - Are they COMPLEMENTARY? (paint + brush, drill + bits)
+   - Is there a HERO PRODUCT that should be more prominent?
+   - What is the COMMON THEME that unites them?
+
+4. VISUAL HARMONY:
+   - Which products have similar colors? (group together)
+   - Which products contrast well? (use contrast strategically)
+   - What COLOR PALETTE emerges from the products combined?
+   - Any products that might visually clash?
+
+5. SIZE & ARRANGEMENT RECOMMENDATIONS:
+   - Suggested relative sizes for each product
+   - Which products should be in front/back?
+   - Natural grouping suggestions
+   - Should they overlap or have clear separation?
+
+6. COMPOSITION SUGGESTION:
+   Based on the products, recommend the best arrangement:
+   
+   FOR 2 PRODUCTS:
+   - Side by side (horizontal emphasis)
+   - Stacked (vertical emphasis)
+   - Diagonal arrangement
+   - Overlapping with depth
+   
+   FOR 3 PRODUCTS:
+   - Triangle composition
+   - One hero + two supporting
+   - Linear arrangement
+   - Cascade/waterfall
+   
+   FOR 4 PRODUCTS:
+   - Grid (2x2)
+   - Diamond arrangement
+   - One hero + three supporting
+   - Arc/semi-circle arrangement
+
+Be SPECIFIC about which arrangement works best for THESE specific products and WHY."""
+
+
+# ============================================================================
+# PROMPT: GENERACIÓN MULTI-PRODUCTO MODO REFERENCE
+# ============================================================================
+
+def get_multi_product_reference_prompt(style_guide: str, company_name: str, colors: str,
+                                        user_request: str, user_intent: str, 
+                                        products_info: str, num_products: int) -> str:
+    """Genera el prompt para modo REFERENCE con múltiples productos (1-4)"""
+    
+    # Layouts recomendados según cantidad de productos
+    layout_guide = ""
+    if num_products == 1:
+        layout_guide = """
+   SINGLE PRODUCT LAYOUT:
+   - Product is the HERO - give it 40-50% of composition space
+   - Center-weighted or rule-of-thirds positioning
+   - Ample space for promotional text"""
+    elif num_products == 2:
+        layout_guide = """
+   TWO PRODUCTS LAYOUT OPTIONS:
+   - SIDE BY SIDE: Equal prominence, horizontal balance
+   - HERO + SIDEKICK: One larger (60%), one smaller (40%)
+   - DIAGONAL: Creates dynamic flow, one front-left, one back-right
+   - OVERLAPPING: Depth effect, products at different planes"""
+    elif num_products == 3:
+        layout_guide = """
+   THREE PRODUCTS LAYOUT OPTIONS:
+   - TRIANGLE: One top-center, two bottom (pyramid)
+   - INVERTED TRIANGLE: Two top, one bottom-center
+   - HERO + SUPPORTING: One large center, two smaller flanking
+   - CASCADE: Diagonal staircase arrangement
+   - ARC: Semi-circular arrangement"""
+    elif num_products == 4:
+        layout_guide = """
+   FOUR PRODUCTS LAYOUT OPTIONS:
+   - GRID 2x2: Classic organized look, equal prominence
+   - DIAMOND: One top, two middle, one bottom
+   - HERO + TRIO: One large, three smaller around it
+   - ARC/FAN: Products arranged in a curve
+   - LAYERED: Front-to-back depth arrangement"""
+    
+    return f"""CREATE A MULTI-PRODUCT PROMOTIONAL INSTAGRAM POST (1:1 Square)
+
+══════════════════════════════════════════════════════════════════════
+MODE: REFERENCE - MULTI-PRODUCT ({num_products} PRODUCTS)
+══════════════════════════════════════════════════════════════════════
+
+Your task is to create a post featuring {num_products} product(s) that:
+1. Looks VISUALLY IDENTICAL to the reference style
+2. Integrates ALL products in a COHERENT, BALANCED composition
+3. Each product is CLEARLY VISIBLE and RECOGNIZABLE
+
+══════════════════════════════════════════════════════════════════════
+⚠️ MULTI-PRODUCT COMPOSITION RULES (CRITICAL!)
+══════════════════════════════════════════════════════════════════════
+
+1. PRODUCT VISIBILITY:
+   - ALL {num_products} products must be clearly visible
+   - No product should be hidden or cut off significantly
+   - Each product should be recognizable (brand, label visible if possible)
+
+2. VISUAL HIERARCHY:
+   - If there's a HERO product mentioned, make it 20-30% larger
+   - If all equal importance, maintain similar visual weight
+   - Products in front should slightly overlap those behind
+
+3. BALANCE & HARMONY:
+   - Distribute visual weight across the composition
+   - Similar colored products: separate them for contrast
+   - Different colored products: can be grouped for variety
+   - Leave breathing room - don't overcrowd
+
+4. DEPTH & DIMENSION:
+   - Create depth by varying product sizes
+   - Front products: larger and sharper
+   - Back products: slightly smaller
+   - Use subtle shadows to ground products
+
+5. RECOMMENDED LAYOUT FOR {num_products} PRODUCT(S):
+{layout_guide}
+
+══════════════════════════════════════════════════════════════════════
+⚠️ CRITICAL: COPY THESE STYLE ELEMENTS EXACTLY
+══════════════════════════════════════════════════════════════════════
+
+1. TEXT EFFECTS:
+   - If references have text with OUTLINE/STROKE → add outline
+   - If references have text with SHADOW → add shadow
+   - Copy the EXACT font weight and style
+   - Match text positioning patterns
+
+2. LOGO TREATMENT:
+   - Place logo in the EXACT same position as references
+   - If logo appears on a COLORED CIRCLE/SHAPE → replicate that
+   - Match the exact size ratio
+
+3. BACKGROUNDS:
+   - If references use TEXTURES → use similar textures
+   - If references use PHOTOS → use contextual photos
+   - Copy diagonal elements or geometric shapes if present
+   - Match the exact color palette
+   - Background should COMPLEMENT all products, not compete
+
+4. PROMOTIONAL ELEMENTS:
+   - Copy how discounts/prices are styled
+   - Replicate banner and badge styles exactly
+   - Match date/validity info placement and style
+   - Position promo elements to not obscure any product
+
+══════════════════════════════════════════════════════════════════════
+STYLE GUIDE (extracted from references - REPLICATE THIS):
+══════════════════════════════════════════════════════════════════════
+{style_guide}
+
+══════════════════════════════════════════════════════════════════════
+BRAND:
+══════════════════════════════════════════════════════════════════════
+Company: {company_name}
+Brand Colors: {colors}
+
+══════════════════════════════════════════════════════════════════════
+CONTENT TO INCLUDE:
+══════════════════════════════════════════════════════════════════════
+Request: "{user_request}"
+
+Intent Analysis:
+{user_intent}
+
+══════════════════════════════════════════════════════════════════════
+PRODUCTS TO FEATURE ({num_products} PRODUCTS):
+══════════════════════════════════════════════════════════════════════
+{products_info}
+
+⚠️ IMPORTANT: Include ALL {num_products} products listed above. Each one must be 
+clearly visible and recognizable in the final composition.
+
+══════════════════════════════════════════════════════════════════════
+⛔ DO NOT (CRITICAL - READ CAREFULLY):
+══════════════════════════════════════════════════════════════════════
+- DO NOT add any border or frame around the image
+- DO NOT make spelling mistakes - double check all text
+- DO NOT copy logos from the reference images - they are OTHER companies
+- DO NOT add "DESLIZA", swipe buttons, or UI elements from references
+- DO NOT add decorative elements like spirals that you see in references
+- DO NOT hide or significantly cut off ANY of the {num_products} products
+- DO NOT make products so small they become unrecognizable
+- DO NOT overcrowd - leave breathing space between elements
+
+⚠️ LOGO RULE (VERY IMPORTANT):
+- Use ONLY the logo I provide labeled "COMPANY LOGO" - this is for {company_name}
+- The logos you see in references (FERREMIX, TOLEDO, etc.) are OTHER companies
+- IGNORE all logos in the reference images completely
+- Show the provided {company_name} logo EXACTLY ONE TIME
+
+══════════════════════════════════════════════════════════════════════
+QUALITY CHECKLIST FOR MULTI-PRODUCT POST:
+══════════════════════════════════════════════════════════════════════
+□ Are ALL {num_products} products clearly visible?
+□ Can each product be identified (brand/type recognizable)?
+□ Is there good visual balance between products?
+□ Does the composition feel cohesive, not random?
+□ Is there breathing room (not overcrowded)?
+□ Does the style match the references exactly?
+□ Is the promotional text readable and correct?
+□ Does the logo appear ONLY ONCE?
+□ Is there NO border/frame around the image?
+
+══════════════════════════════════════════════════════════════════════
+FINAL REQUIREMENT:
+══════════════════════════════════════════════════════════════════════
+Copy the STYLE from references (colors, layout, text effects, composition).
+Integrate ALL {num_products} products harmoniously - the post should look 
+intentionally designed as a multi-product promotion, NOT like products 
+were randomly thrown together.
+The image should go EDGE TO EDGE with NO border or frame.
+The {company_name} logo appears ONLY ONCE."""
+
+
+# ============================================================================
+# PROMPT: GENERACIÓN MULTI-PRODUCTO MODO CREATIVE
+# ============================================================================
+
+def get_multi_product_creative_prompt(style_guide: str, creative_context: str, company_name: str,
+                                       colors: List[str], user_request: str, user_intent: str,
+                                       products_info: str, num_products: int) -> str:
+    """Genera el prompt para modo CREATIVE con múltiples productos (1-4)"""
+    
+    # Layouts recomendados según cantidad de productos
+    layout_guide = ""
+    if num_products == 1:
+        layout_guide = """
+   SINGLE PRODUCT LAYOUT:
+   - Product is the HERO - give it 40-50% of composition space
+   - Center-weighted or rule-of-thirds positioning
+   - Creative elements can surround and enhance the product"""
+    elif num_products == 2:
+        layout_guide = """
+   TWO PRODUCTS LAYOUT OPTIONS:
+   - SIDE BY SIDE: Products framed by creative elements
+   - HERO + SIDEKICK: One larger with more effects around it
+   - DIAGONAL: Creative flow connecting both products
+   - OVERLAPPING: Unified by shared creative elements"""
+    elif num_products == 3:
+        layout_guide = """
+   THREE PRODUCTS LAYOUT OPTIONS:
+   - TRIANGLE: Creative elements emanating from center
+   - HERO + SUPPORTING: Main product with effects, two clean
+   - CASCADE: Creative elements following the flow
+   - UNIFIED: All products sharing creative environment"""
+    elif num_products == 4:
+        layout_guide = """
+   FOUR PRODUCTS LAYOUT OPTIONS:
+   - GRID 2x2: Creative elements in background/corners
+   - DIAMOND: Effects radiating from center
+   - HERO + TRIO: Main product with most effects
+   - ARC/FAN: Creative elements following the curve"""
+    
+    return f"""CREATE A CREATIVE MULTI-PRODUCT PROMOTIONAL INSTAGRAM POST (1:1 Square)
+
+══════════════════════════════════════════════════════════════════════
+MODE: CREATIVE - MULTI-PRODUCT ({num_products} PRODUCTS)
+══════════════════════════════════════════════════════════════════════
+
+Your task is to create a post that:
+1. MATCHES the exact STYLE ELEMENTS of the references
+2. INTEGRATES {num_products} products in a COHESIVE composition
+3. ADDS creative contextual elements that relate to the products
+4. Each product remains CLEARLY VISIBLE despite creative effects
+
+══════════════════════════════════════════════════════════════════════
+⚠️ MULTI-PRODUCT COMPOSITION RULES (CRITICAL!)
+══════════════════════════════════════════════════════════════════════
+
+1. PRODUCT VISIBILITY (NON-NEGOTIABLE):
+   - ALL {num_products} products must be clearly visible
+   - Creative effects should ENHANCE, not OBSCURE products
+   - Each product brand/label should be recognizable
+   - Products take priority over decorative elements
+
+2. CREATIVE ELEMENT INTEGRATION:
+   - Use creative elements to UNIFY the products
+   - Effects can flow between/around products
+   - Keep products as focal points, effects as supporting
+   - Creative elements should relate to the product category
+
+3. VISUAL HIERARCHY WITH CREATIVITY:
+   - If hero product exists: more creative attention on it
+   - Supporting products: cleaner, less effects
+   - Balance creative elements across the composition
+
+4. DEPTH & HARMONY:
+   - Creative elements can create depth between products
+   - Use effects to connect visually different products
+   - Shadows/glows should be consistent across all products
+
+5. RECOMMENDED LAYOUT FOR {num_products} PRODUCT(S):
+{layout_guide}
+
+══════════════════════════════════════════════════════════════════════
+⚠️ MANDATORY STYLE ELEMENTS (copy EXACTLY from references):
+══════════════════════════════════════════════════════════════════════
+
+1. TEXT TREATMENT:
+   - Apply the SAME text effects as references (outline/stroke if they have it)
+   - Use the SAME font weight and style
+   - Match the SAME size hierarchy
+   
+2. LOGO PLACEMENT:
+   - Position the logo EXACTLY as shown in references
+   - If references show logo in a colored circle/shape, DO THE SAME
+   - Match the exact corner/position used in references
+
+3. BACKGROUND APPROACH:
+   - If references use textures, use similar textures
+   - If references use diagonal elements, include them
+   - Match the background color scheme
+   - Background should complement ALL products
+
+4. PROMOTIONAL ELEMENTS:
+   - Style discounts/percentages the same way as references
+   - Use similar banner/badge styles for dates/validity
+   - Match the promotional element colors and shapes
+   - Position to not obstruct any product
+
+══════════════════════════════════════════════════════════════════════
+STYLE GUIDE (extracted from references - FOLLOW THIS):
+══════════════════════════════════════════════════════════════════════
+{style_guide}
+
+══════════════════════════════════════════════════════════════════════
+CREATIVE ADDITIONS (based on products - ADD THESE):
+══════════════════════════════════════════════════════════════════════
+{creative_context}
+
+CREATIVE ELEMENTS SHOULD UNIFY ALL PRODUCTS:
+- Find a COMMON THEME across all {num_products} products
+- Paint products → splashes, drips connecting them
+- Tools → workshop environment surrounding all
+- Mixed products → use brand colors as unifying creative element
+- The creative elements should make the products feel like they BELONG TOGETHER
+
+══════════════════════════════════════════════════════════════════════
+BRAND:
+══════════════════════════════════════════════════════════════════════
+Company: {company_name}
+Brand Colors: {', '.join(colors)}
+- Use {colors[0]} for accents and highlights
+- Use {colors[1]} for backgrounds or primary elements
+- Use {colors[2]} for text
+
+══════════════════════════════════════════════════════════════════════
+CONTENT:
+══════════════════════════════════════════════════════════════════════
+Request: "{user_request}"
+
+Intent Analysis:
+{user_intent}
+
+══════════════════════════════════════════════════════════════════════
+PRODUCTS TO FEATURE ({num_products} PRODUCTS):
+══════════════════════════════════════════════════════════════════════
+{products_info}
+
+⚠️ IMPORTANT: Include ALL {num_products} products listed above. Creative elements
+should ENHANCE visibility, not compete with the products.
+
+══════════════════════════════════════════════════════════════════════
+⛔ DO NOT (CRITICAL - READ CAREFULLY):
+══════════════════════════════════════════════════════════════════════
+- DO NOT add any BORDER or FRAME around the image - image goes edge to edge
+- DO NOT make spelling mistakes - verify all text carefully
+- DO NOT copy logos from the reference images - they are OTHER companies
+- DO NOT add "DESLIZA", swipe buttons, or UI elements from references
+- DO NOT add decorative elements like spirals from other brands
+- DO NOT let creative effects obscure or hide ANY product
+- DO NOT make products unrecognizable with too many effects
+- DO NOT treat products unequally unless one is explicitly the hero
+
+⚠️ LOGO RULE (VERY IMPORTANT):
+- Use ONLY the logo I provide labeled "COMPANY LOGO"
+- The logos you see in references (FERREMIX, TOLEDO, etc.) are OTHER companies
+- IGNORE all logos in the reference images completely  
+- Show the provided company logo EXACTLY ONE TIME in one corner
+- NO duplicates, NO logos from references
+
+══════════════════════════════════════════════════════════════════════
+QUALITY CHECKLIST FOR CREATIVE MULTI-PRODUCT POST:
+══════════════════════════════════════════════════════════════════════
+□ Are ALL {num_products} products clearly visible?
+□ Can each product brand/type be identified?
+□ Do creative effects ENHANCE (not obscure) products?
+□ Is there a unifying creative theme for all products?
+□ Does the composition feel intentional and cohesive?
+□ Does the style match the references?
+□ Is text readable and correctly spelled?
+□ Does the logo appear ONLY ONCE?
+□ Is there NO border/frame around the image?
+
+══════════════════════════════════════════════════════════════════════
+FINAL REQUIREMENTS:
+══════════════════════════════════════════════════════════════════════
+1. ✅ Match reference TEXT STYLE (outlines, shadows, effects)
+2. ✅ Match reference LOGO TREATMENT (position, background shape)
+3. ✅ Match reference BACKGROUND APPROACH (textures, colors)
+4. ✅ Match reference PROMOTIONAL STYLE (banners, badges)
+5. ✅ ALL {num_products} products clearly visible and recognizable
+6. ✅ Creative elements UNIFY the products visually
+7. ✅ Products are the STARS - effects are supporting cast
+8. ✅ Professional quality matching references
+9. ✅ NO BORDER/FRAME - content goes to the edges
+10. ✅ LOGO appears ONLY ONCE
+11. ✅ CORRECT SPELLING on all text
+
+The output should look like a COHESIVE multi-product promotion where all 
+{num_products} products were intentionally designed together, enhanced by 
+creative elements that make sense for these products."""
+
+
+# ============================================================================
+# INSTRUCCIONES PARA MÚLTIPLES PRODUCTOS
+# ============================================================================
+
+def get_multi_product_instruction(num_products: int) -> str:
+    """Genera la instrucción para las imágenes de múltiples productos"""
+    return f"""
+══ PRODUCT IMAGES ({num_products} PRODUCTS) - Feature ALL prominently ══
+These are the {num_products} products to include in the post.
+- ALL products must be clearly visible
+- Each product should be recognizable
+- Arrange them harmoniously in the composition
+- Don't let any product be hidden or cut off
+══════════════════════════════════════════════════════════════════════"""

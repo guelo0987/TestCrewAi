@@ -28,6 +28,7 @@ from prompts import (
     ANALYZE_PRODUCT_CONTEXT_PROMPT,
     ANALYZE_MESSAGE_PROMPT,
     ANALYZE_POST_FOR_REGENERATION_PROMPT,
+    ANALYZE_MULTIPLE_PRODUCTS_PROMPT,
     REFERENCES_INSTRUCTION,
     LOGO_INSTRUCTION,
     PRODUCT_INSTRUCTION,
@@ -36,6 +37,9 @@ from prompts import (
     get_creative_prompt,
     get_scratch_prompt,
     get_regeneration_prompt,
+    get_multi_product_reference_prompt,
+    get_multi_product_creative_prompt,
+    get_multi_product_instruction,
 )
 
 load_dotenv()
@@ -162,6 +166,21 @@ class AdaptiveAnalyzer:
     def analyze_post_for_regeneration(self, post_image: Image.Image) -> str:
         """Analiza un post existente para regenerarlo"""
         return self.client.analyze_with_images(ANALYZE_POST_FOR_REGENERATION_PROMPT, [post_image])
+    
+    def analyze_multiple_products(self, product_images: List[Image.Image]) -> str:
+        """Analiza múltiples productos y cómo deben integrarse"""
+        num_products = len(product_images)
+        prompt = ANALYZE_MULTIPLE_PRODUCTS_PROMPT.format(num_products=num_products)
+        return self.client.analyze_with_images(prompt, product_images)
+    
+    def analyze_multiple_products_for_context(self, product_images: List[Image.Image]) -> str:
+        """Analiza múltiples productos para contexto creativo"""
+        # Analizar cada producto para contexto y combinar
+        contexts = []
+        for i, img in enumerate(product_images, 1):
+            context = self.client.analyze_with_images(ANALYZE_PRODUCT_CONTEXT_PROMPT, [img])
+            contexts.append(f"PRODUCT {i}:\n{context}")
+        return "\n\n".join(contexts)
     
     def analyze_all(
         self, 
@@ -645,6 +664,259 @@ Use a DIFFERENT background, DIFFERENT layout structure, DIFFERENT visual approac
         
         return {"status": "error", "message": "Falló la regeneración"}
     
+    def create_multi_product_post(
+        self,
+        user_request: str,
+        product_image_paths: List[str],
+        output_path: str = "post_multi.png",
+        mode: GenerationMode = GenerationMode.CREATIVE
+    ) -> Dict[str, Any]:
+        """
+        Genera un post con MÚLTIPLES productos (1-4).
+        
+        Args:
+            user_request: Solicitud del usuario
+            product_image_paths: Lista de rutas a las imágenes de productos (1-4)
+            output_path: Ruta de salida
+            mode: REFERENCE o CREATIVE
+        """
+        num_products = len(product_image_paths)
+        
+        if num_products < 1 or num_products > 4:
+            return {"status": "error", "message": "Se requieren entre 1 y 4 productos"}
+        
+        print("\n" + "="*60)
+        print(f"🎨 GENERANDO POST MULTI-PRODUCTO ({num_products} productos)")
+        print(f"   Modo: {mode.value.upper()}")
+        print("="*60)
+        
+        # 1. Cargar todas las imágenes de productos
+        product_images = []
+        for i, path in enumerate(product_image_paths, 1):
+            if os.path.exists(path):
+                img = Image.open(path)
+                if img.mode in ('RGBA', 'P'):
+                    img = img.convert('RGB')
+                product_images.append(img)
+                print(f"   ✓ Producto {i}: {os.path.basename(path)}")
+            else:
+                print(f"   ⚠️ Producto {i} no encontrado: {path}")
+        
+        if len(product_images) == 0:
+            return {"status": "error", "message": "No se encontraron imágenes de productos"}
+        
+        num_products = len(product_images)  # Actualizar con productos cargados
+        
+        # 2. Análisis
+        print("\n📊 Analizando...")
+        
+        # Analizar intención del usuario
+        print("   → Analizando intención...")
+        user_intent = self.analyzer.analyze_user_intent(user_request, self.company)
+        
+        # Analizar múltiples productos
+        print(f"   → Analizando {num_products} productos y su integración...")
+        products_info = self.analyzer.analyze_multiple_products(product_images)
+        
+        # Si es modo creativo, obtener contexto creativo
+        creative_context = ""
+        if mode == GenerationMode.CREATIVE:
+            print("   → Generando contexto creativo para productos...")
+            creative_context = self.analyzer.analyze_multiple_products_for_context(product_images)
+        
+        print("   ✓ Análisis completado")
+        
+        # 3. Construir prompt según modo
+        if mode == GenerationMode.REFERENCE:
+            prompt = get_multi_product_reference_prompt(
+                self.style_guide,
+                self.company.name,
+                ', '.join(self.company.color_palette),
+                user_request,
+                user_intent,
+                products_info,
+                num_products
+            )
+        else:
+            prompt = get_multi_product_creative_prompt(
+                self.style_guide,
+                creative_context,
+                self.company.name,
+                self.company.color_palette,
+                user_request,
+                user_intent,
+                products_info,
+                num_products
+            )
+        
+        # 4. Construir partes
+        parts = self._build_parts_multi_product(prompt, product_images)
+        
+        # 5. Generar
+        print(f"\n🚀 Generando imagen con {num_products} productos...")
+        generated = self.client.generate_image(parts)
+        
+        if generated:
+            output_dir = os.path.dirname(output_path)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+            
+            generated.save(output_path, quality=self.config.output_quality)
+            print(f"\n✅ POST MULTI-PRODUCTO GUARDADO: {output_path}")
+            print(f"   Tamaño: {generated.size[0]}x{generated.size[1]}")
+            print(f"   Productos incluidos: {num_products}")
+            
+            return {
+                "status": "success", 
+                "path": output_path, 
+                "mode": mode.value,
+                "num_products": num_products
+            }
+        
+        return {"status": "error", "message": "Falló la generación"}
+    
+    def create_multi_product_both(
+        self,
+        user_request: str,
+        product_image_paths: List[str],
+        output_folder: str = "posts"
+    ) -> Dict[str, Any]:
+        """
+        Genera AMBAS versiones (REFERENCE y CREATIVE) con múltiples productos.
+        Optimizado: analiza UNA sola vez.
+        
+        Args:
+            user_request: Solicitud del usuario
+            product_image_paths: Lista de rutas a las imágenes de productos (1-4)
+            output_folder: Carpeta de salida
+        """
+        num_products = len(product_image_paths)
+        
+        if num_products < 1 or num_products > 4:
+            return {"status": "error", "message": "Se requieren entre 1 y 4 productos"}
+        
+        print("\n" + "="*60)
+        print(f"🎨 GENERANDO AMBAS VERSIONES MULTI-PRODUCTO ({num_products} productos)")
+        print("="*60)
+        
+        # 1. Cargar todas las imágenes de productos
+        product_images = []
+        for i, path in enumerate(product_image_paths, 1):
+            if os.path.exists(path):
+                img = Image.open(path)
+                if img.mode in ('RGBA', 'P'):
+                    img = img.convert('RGB')
+                product_images.append(img)
+                print(f"   ✓ Producto {i}: {os.path.basename(path)}")
+            else:
+                print(f"   ⚠️ Producto {i} no encontrado: {path}")
+        
+        if len(product_images) == 0:
+            return {"status": "error", "message": "No se encontraron imágenes de productos"}
+        
+        num_products = len(product_images)
+        
+        # 2. Análisis UNA sola vez
+        print("\n📊 Analizando (una sola vez para ambas versiones)...")
+        
+        print("   → Analizando intención...")
+        user_intent = self.analyzer.analyze_user_intent(user_request, self.company)
+        
+        print(f"   → Analizando {num_products} productos...")
+        products_info = self.analyzer.analyze_multiple_products(product_images)
+        
+        print("   → Generando contexto creativo...")
+        creative_context = self.analyzer.analyze_multiple_products_for_context(product_images)
+        
+        print("   ✓ Análisis completado")
+        
+        # 3. Construir partes base
+        base_parts = self._build_parts_multi_product_base(product_images)
+        
+        results = {}
+        os.makedirs(output_folder, exist_ok=True)
+        
+        # 4. Generar REFERENCE
+        print("\n📋 Generando versión REFERENCE...")
+        ref_prompt = get_multi_product_reference_prompt(
+            self.style_guide,
+            self.company.name,
+            ', '.join(self.company.color_palette),
+            user_request,
+            user_intent,
+            products_info,
+            num_products
+        )
+        ref_parts = base_parts + [types.Part.from_text(text=f"\n{ref_prompt}")]
+        
+        ref_img = self.client.generate_image(ref_parts)
+        if ref_img:
+            ref_path = f"{output_folder}/post_multi_reference.png"
+            ref_img.save(ref_path, quality=self.config.output_quality)
+            results["reference"] = {"status": "success", "path": ref_path, "num_products": num_products}
+            print(f"   ✓ Guardado: {ref_path}")
+        else:
+            results["reference"] = {"status": "error"}
+        
+        # 5. Generar CREATIVE
+        print("\n🎨 Generando versión CREATIVE...")
+        creative_prompt = get_multi_product_creative_prompt(
+            self.style_guide,
+            creative_context,
+            self.company.name,
+            self.company.color_palette,
+            user_request,
+            user_intent,
+            products_info,
+            num_products
+        )
+        creative_parts = base_parts + [types.Part.from_text(text=f"\n{creative_prompt}")]
+        
+        creative_img = self.client.generate_image(creative_parts)
+        if creative_img:
+            creative_path = f"{output_folder}/post_multi_creative.png"
+            creative_img.save(creative_path, quality=self.config.output_quality)
+            results["creative"] = {"status": "success", "path": creative_path, "num_products": num_products}
+            print(f"   ✓ Guardado: {creative_path}")
+        else:
+            results["creative"] = {"status": "error"}
+        
+        print("\n" + "="*60)
+        print(f"✅ AMBAS VERSIONES MULTI-PRODUCTO GENERADAS ({num_products} productos)")
+        print("="*60)
+        
+        return results
+    
+    def _build_parts_multi_product_base(self, product_images: List[Image.Image]) -> List[types.Part]:
+        """Construye las partes base para múltiples productos (sin prompt)"""
+        parts = []
+        
+        # Referencias
+        if self.reference_images:
+            parts.append(types.Part.from_text(text=REFERENCES_INSTRUCTION))
+            for ref_img in self.reference_images:
+                parts.append(self._pil_to_part(ref_img))
+        
+        # Logo
+        if self.logo_image:
+            parts.append(types.Part.from_text(text=LOGO_INSTRUCTION))
+            parts.append(self._pil_to_part(self.logo_image))
+        
+        # Múltiples productos
+        num_products = len(product_images)
+        parts.append(types.Part.from_text(text=get_multi_product_instruction(num_products)))
+        for i, prod_img in enumerate(product_images, 1):
+            parts.append(types.Part.from_text(text=f"\n[PRODUCT {i}]"))
+            parts.append(self._pil_to_part(prod_img))
+        
+        return parts
+    
+    def _build_parts_multi_product(self, prompt: str, product_images: List[Image.Image]) -> List[types.Part]:
+        """Construye todas las partes para múltiples productos incluyendo el prompt"""
+        parts = self._build_parts_multi_product_base(product_images)
+        parts.append(types.Part.from_text(text=f"\n{prompt}"))
+        return parts
+    
     def _build_parts_base(self, product_image: Optional[Image.Image]) -> List[types.Part]:
         """Construye las partes base (sin prompt) para reutilizar"""
         parts = []
@@ -739,6 +1011,58 @@ class InstagramAI:
         
         return self.generator.regenerate_post(existing_post, output, feedback)
     
+    def create_multi_product(
+        self,
+        request: str,
+        product_images: List[str],
+        output: str = "post_multi.png",
+        mode: str = "creative"
+    ) -> Dict[str, Any]:
+        """
+        Genera un post con MÚLTIPLES productos (1-4).
+        
+        Args:
+            request: Solicitud del usuario (ej: "20% de descuento en toda la línea DeWalt")
+            product_images: Lista de rutas a imágenes de productos (1-4)
+            output: Ruta de salida
+            mode: "creative" o "reference"
+        
+        Ejemplo:
+            ai.create_multi_product(
+                request="Combo especial: Taladro + Brocas + Extensión",
+                product_images=["fotos/taladro.png", "fotos/brocas.png", "fotos/extension.png"],
+                output="posts/combo.png",
+                mode="creative"
+            )
+        """
+        gen_mode = GenerationMode.CREATIVE if mode == "creative" else GenerationMode.REFERENCE
+        return self.generator.create_multi_product_post(request, product_images, output, gen_mode)
+    
+    def create_multi_product_both_versions(
+        self,
+        request: str,
+        product_images: List[str],
+        output_folder: str = "posts"
+    ) -> Dict[str, Any]:
+        """
+        Genera AMBAS versiones (REFERENCE y CREATIVE) con múltiples productos.
+        Optimizado: analiza una sola vez para ambas versiones.
+        
+        Args:
+            request: Solicitud del usuario
+            product_images: Lista de rutas a imágenes de productos (1-4)
+            output_folder: Carpeta de salida
+        
+        Ejemplo:
+            results = ai.create_multi_product_both_versions(
+                request="¡Llegaron los nuevos productos!",
+                product_images=["fotos/prod1.png", "fotos/prod2.png", "fotos/prod3.png", "fotos/prod4.png"],
+                output_folder="posts"
+            )
+            # Genera: posts/post_multi_reference.png y posts/post_multi_creative.png
+        """
+        return self.generator.create_multi_product_both(request, product_images, output_folder)
+    
     def get_style_guide(self) -> str:
         """Retorna la guía de estilo"""
         return self.generator.style_guide
@@ -778,30 +1102,65 @@ if __name__ == "__main__":
     print("\n🎉 ¡Listo!")
     
     # ================================================================
-    # También puedes usar los otros modos:
+    # MODOS DISPONIBLES:
     # ================================================================
-    # 
-    # CON producto (ambas versiones):
+    
+    # ================================================================
+    # 1. MODO SCRATCH: Sin imagen de producto
+    # ================================================================
+    # result = ai.create_scratch(
+    #     request="Feliz dia de la restauracion Dominicana, laboraremos de 8am a 1pm",
+    #     output="posts/post_scratch.png"
+    # )
+    
+    # ================================================================
+    # 2. CON UN PRODUCTO (ambas versiones):
+    # ================================================================
     # results = ai.create_both_versions(
     #     request="Tinaco Hercules, disponible en 210GL y 265GL",
     #     product_image="fotos/tinaco.png",
     #     output_folder="posts"
     # )
-    # 
-    # Solo una versión:
+    
+    # ================================================================
+    # 3. CON UN PRODUCTO (solo una versión):
+    # ================================================================
     # result = ai.create_post(
     #     request="Nuevo producto disponible",
     #     product_image="fotos/producto.png",
     #     output="post.png",
     #     mode="creative"  # o "reference"
     # )
-    #
+    
     # ================================================================
-    # REGENERAR un post existente:
+    # 4. MULTI-PRODUCTO (1-4 productos, ambas versiones):
     # ================================================================
-    # Regenerar con los cambios al código - ahora SÍ debería generar algo diferente
-    result = ai.regenerate(
-        existing_post="posts/post_creative.png",
-        output="posts/post_v12.png",
-        feedback=""
+    results = ai.create_multi_product_both_versions(
+        request="Todo lo que necesites para tu obra, en un solo lugar",
+        product_images=[
+            "fotos/cemento.png",
+            "fotos/varilla.png",
+            "fotos/block.png"
+        ],
+        output_folder="posts"
     )
+    # # Genera: posts/post_multi_reference.png y posts/post_multi_creative.png
+    
+    # ================================================================
+    # 5. MULTI-PRODUCTO (solo una versión):
+    # ================================================================
+    # result = ai.create_multi_product(
+    #     request="Promoción: Cemento + Varillas disponibles",
+    #     product_images=["fotos/cemento.png", "fotos/varillas.png"],
+    #     output="posts/post_combo.png",
+    #     mode="creative"  # o "reference"
+    # )
+    
+    # ================================================================
+    # 6. REGENERAR un post existente:
+    # ================================================================
+    # result = ai.regenerate(
+    #     existing_post="posts/post_creative.png",
+    #     output="posts/post_v12.png",
+    #     feedback=""
+    # )  
