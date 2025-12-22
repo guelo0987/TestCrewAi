@@ -29,9 +29,11 @@ from prompts import (
     ANALYZE_MESSAGE_PROMPT,
     ANALYZE_POST_FOR_REGENERATION_PROMPT,
     ANALYZE_MULTIPLE_PRODUCTS_PROMPT,
+    ANALYZE_EDIT_REQUEST_PROMPT,
     REFERENCES_INSTRUCTION,
     LOGO_INSTRUCTION,
     PRODUCT_INSTRUCTION,
+    POST_TO_EDIT_INSTRUCTION,
     get_user_intent_prompt,
     get_reference_prompt,
     get_creative_prompt,
@@ -40,6 +42,7 @@ from prompts import (
     get_multi_product_reference_prompt,
     get_multi_product_creative_prompt,
     get_multi_product_instruction,
+    get_edit_post_prompt,
 )
 
 load_dotenv()
@@ -166,6 +169,11 @@ class AdaptiveAnalyzer:
     def analyze_post_for_regeneration(self, post_image: Image.Image) -> str:
         """Analiza un post existente para regenerarlo"""
         return self.client.analyze_with_images(ANALYZE_POST_FOR_REGENERATION_PROMPT, [post_image])
+    
+    def analyze_edit_request(self, edit_request: str) -> str:
+        """Analiza la solicitud de edición del usuario para entender qué cambios hacer"""
+        prompt = ANALYZE_EDIT_REQUEST_PROMPT.format(edit_request=edit_request)
+        return self.client.analyze_text(prompt)
     
     def analyze_multiple_products(self, product_images: List[Image.Image]) -> str:
         """Analiza múltiples productos y cómo deben integrarse"""
@@ -664,6 +672,116 @@ Use a DIFFERENT background, DIFFERENT layout structure, DIFFERENT visual approac
         
         return {"status": "error", "message": "Falló la regeneración"}
     
+    def edit_post(
+        self,
+        existing_post_path: str,
+        edit_request: str,
+        output_path: str = "post_edited.png"
+    ) -> Dict[str, Any]:
+        """
+        Edita un post existente haciendo cambios específicos solicitados por el usuario.
+        
+        A diferencia de regenerate_post que crea algo completamente nuevo,
+        edit_post hace cambios puntuales manteniendo el diseño original.
+        
+        Args:
+            existing_post_path: Ruta al post que se quiere editar
+            edit_request: Cambios solicitados por el usuario 
+                         (ej: "pon el logo abajo a la derecha", "cambia el fondo a azul")
+            output_path: Ruta de salida para el post editado
+        
+        Returns:
+            Dict con status y path del resultado
+        
+        Ejemplos de edit_request:
+            - "Mueve el logo a la esquina inferior derecha"
+            - "Cambia el color del fondo a azul oscuro"
+            - "Haz el texto más grande"
+            - "Quita el texto de abajo"
+            - "Agrega un borde naranja"
+            - "Pon el precio en rojo"
+            - "Cambia '20%' por '30%'"
+        """
+        print("\n" + "="*60)
+        print("✏️ EDITANDO POST")
+        print("="*60)
+        
+        # 1. Cargar el post existente
+        if not os.path.exists(existing_post_path):
+            return {"status": "error", "message": f"Post no encontrado: {existing_post_path}"}
+        
+        existing_post = Image.open(existing_post_path)
+        if existing_post.mode in ('RGBA', 'P'):
+            existing_post = existing_post.convert('RGB')
+        print(f"   ✓ Post cargado: {existing_post_path}")
+        
+        # 2. Analizar la solicitud de edición
+        print("\n📊 Analizando cambios solicitados...")
+        print(f"   Solicitud: \"{edit_request}\"")
+        edit_analysis = self.analyzer.analyze_edit_request(edit_request)
+        print("   ✓ Análisis completado")
+        
+        # 3. Construir prompt de edición
+        prompt = get_edit_post_prompt(
+            edit_analysis,
+            self.company.name,
+            self.company.color_palette,
+            edit_request
+        )
+        
+        # 4. Construir partes - Incluimos el post original para que lo modifique
+        parts = []
+        
+        # Post a editar (lo incluimos para que vea exactamente qué modificar)
+        parts.append(types.Part.from_text(text=POST_TO_EDIT_INSTRUCTION))
+        parts.append(self._pil_to_part(existing_post))
+        
+        # Referencias de estilo (para mantener coherencia)
+        if self.reference_images:
+            parts.append(types.Part.from_text(text="""
+══ STYLE REFERENCES (for consistency) ══
+These show the brand style. Use them only to maintain visual consistency 
+with the brand, NOT to change the design. Keep the edited post's style similar to the original.
+"""))
+            # Solo incluir algunas referencias para no sobrecargar
+            for ref_img in self.reference_images[:3]:
+                parts.append(self._pil_to_part(ref_img))
+        
+        # Logo (por si necesita reposicionarlo)
+        if self.logo_image:
+            parts.append(types.Part.from_text(text="""
+══ COMPANY LOGO (use if repositioning is needed) ══
+This is the company logo. Use it ONLY if the edit requires moving or resizing the logo.
+"""))
+            parts.append(self._pil_to_part(self.logo_image))
+        
+        # Prompt de edición
+        parts.append(types.Part.from_text(text=f"\n{prompt}"))
+        
+        # 5. Generar
+        print(f"\n🚀 Aplicando cambios...")
+        generated = self.client.generate_image(parts)
+        
+        if generated:
+            output_dir = os.path.dirname(output_path)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+            
+            generated.save(output_path, quality=self.config.output_quality)
+            print(f"\n✅ POST EDITADO: {output_path}")
+            print(f"   Tamaño: {generated.size[0]}x{generated.size[1]}")
+            print(f"   Cambios aplicados: \"{edit_request}\"")
+            
+            return {
+                "status": "success", 
+                "path": output_path, 
+                "mode": "edit",
+                "original": existing_post_path,
+                "changes": edit_request
+            }
+        
+        return {"status": "error", "message": "Falló la edición"}
+    
     def create_multi_product_post(
         self,
         user_request: str,
@@ -1008,8 +1126,43 @@ class InstagramAI:
         output: str = "post_regenerated.png",
         feedback: str = ""
     ) -> Dict[str, Any]:
-        
+        """
+        Regenera completamente un post existente con un diseño diferente.
+        Usar cuando el diseño no gustó y se quiere algo completamente nuevo.
+        """
         return self.generator.regenerate_post(existing_post, output, feedback)
+    
+    def edit(
+        self,
+        existing_post: str,
+        changes: str,
+        output: str = "post_edited.png"
+    ) -> Dict[str, Any]:
+        """
+        Edita un post existente haciendo cambios específicos.
+        Usar cuando el diseño SÍ gustó pero se quieren ajustes puntuales.
+        
+        Args:
+            existing_post: Ruta al post que se quiere editar
+            changes: Descripción de los cambios deseados
+            output: Ruta de salida
+        
+        Ejemplos de changes:
+            - "Mueve el logo a la esquina inferior derecha"
+            - "Cambia el color del fondo a azul oscuro"  
+            - "Haz el texto del precio más grande"
+            - "Quita el texto de la fecha"
+            - "Pon el porcentaje en color rojo"
+            - "Cambia '20%' por '35%'"
+            - "Agrega 'Válido hasta 31 de diciembre' abajo"
+            - "El producto ponlo más a la izquierda"
+            - "Quita el efecto de sombra del texto"
+        
+        Diferencia con regenerate():
+            - edit(): Mantiene el diseño, hace cambios puntuales
+            - regenerate(): Crea un diseño completamente nuevo
+        """
+        return self.generator.edit_post(existing_post, changes, output)
     
     def create_multi_product(
         self,
@@ -1135,15 +1288,15 @@ if __name__ == "__main__":
     # ================================================================
     # 4. MULTI-PRODUCTO (1-4 productos, ambas versiones):
     # ================================================================
-    results = ai.create_multi_product_both_versions(
-        request="Todo lo que necesites para tu obra, en un solo lugar",
-        product_images=[
-            "fotos/cemento.png",
-            "fotos/varilla.png",
-            "fotos/block.png"
-        ],
-        output_folder="posts"
-    )
+    # results = ai.create_multi_product_both_versions(
+    #     request="Todo lo que necesites para tu obra, en un solo lugar",
+    #     product_images=[
+    #         "fotos/cemento.png",
+    #         "fotos/varilla.png",
+    #         "fotos/block.png"
+    #     ],
+    #     output_folder="posts"
+    # )
     # # Genera: posts/post_multi_reference.png y posts/post_multi_creative.png
     
     # ================================================================
@@ -1157,10 +1310,28 @@ if __name__ == "__main__":
     # )
     
     # ================================================================
-    # 6. REGENERAR un post existente:
+    # 6. REGENERAR un post existente (diseño completamente nuevo):
     # ================================================================
     # result = ai.regenerate(
     #     existing_post="posts/post_creative.png",
     #     output="posts/post_v12.png",
     #     feedback=""
-    # )  
+    # )
+    
+    # ================================================================
+    # 7. EDITAR un post existente (cambios específicos):
+    # ================================================================
+    result = ai.edit(
+        existing_post="posts/post_v8.png",
+        changes="Mueve el logo a la esquina inferior derecha",
+        output="posts/post_edited.png"
+    )
+    # 
+    # Más ejemplos de ediciones:
+    # - "Cambia el color del fondo a azul oscuro"
+    # - "Haz el texto más grande"
+    # - "Quita el texto de la fecha de validez"
+    # - "Pon el porcentaje en rojo"
+    # - "Cambia '20%' por '35%'"
+    # - "El producto ponlo más a la izquierda"
+    # - "Agrega 'Envío gratis' en la parte de abajo"  

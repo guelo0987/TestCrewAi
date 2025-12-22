@@ -1124,3 +1124,184 @@ These are the {num_products} products to include in the post.
 - Arrange them harmoniously in the composition
 - Don't let any product be hidden or cut off
 ══════════════════════════════════════════════════════════════════════"""
+
+
+# ============================================================================
+# PROMPT: ANÁLISIS DE MODIFICACIONES SOLICITADAS
+# ============================================================================
+
+ANALYZE_EDIT_REQUEST_PROMPT = """Analyze this user request to MODIFY an existing post.
+
+USER REQUEST: "{edit_request}"
+
+Your job is to understand EXACTLY what changes the user wants to make to their existing post.
+
+═══════════════════════════════════════════════════════════════
+IDENTIFY ALL REQUESTED CHANGES:
+═══════════════════════════════════════════════════════════════
+
+1. ELEMENT CHANGES:
+   - What specific elements need to be MOVED? (logo, text, product, etc.)
+   - What elements need to be REMOVED?
+   - What elements need to be ADDED?
+   - New positions requested (top, bottom, left, right, center, corner)
+
+2. COLOR CHANGES:
+   - Any background color changes?
+   - Any text color changes?
+   - Any element color changes?
+   - Specific hex codes if mentioned?
+
+3. TEXT CHANGES:
+   - Text to be MODIFIED (old → new)
+   - Text to be REMOVED
+   - Text to be ADDED
+   - Font size changes (bigger, smaller)
+   - Text position changes
+
+4. STYLE CHANGES:
+   - Add/remove effects (shadows, outlines, glow)
+   - Change opacity or visibility
+   - Resize elements (make bigger/smaller)
+
+5. LAYOUT CHANGES:
+   - Overall composition adjustment
+   - Spacing changes
+   - Alignment changes
+
+6. WHAT TO KEEP UNCHANGED:
+   - List elements that should remain EXACTLY as they are
+   - The overall design style should be preserved unless specified
+
+Be EXTREMELY SPECIFIC about what to change and what to keep.
+Format each change as: [ELEMENT] → [ACTION] → [NEW STATE]"""
+
+
+# ============================================================================
+# PROMPT: EDICIÓN/MODIFICACIÓN DE POST EXISTENTE
+# ============================================================================
+
+def get_edit_post_prompt(edit_analysis: str, company_name: str, colors: List[str], 
+                         user_request: str) -> str:
+    """Genera el prompt para EDITAR/MODIFICAR un post existente"""
+    return f"""EDIT THIS POST - MAKE SPECIFIC CHANGES ONLY
+
+══════════════════════════════════════════════════════════════════════
+MODE: EDIT - MODIFY EXISTING POST (NOT RECREATE)
+══════════════════════════════════════════════════════════════════════
+
+⚠️ CRITICAL INSTRUCTION:
+This is an EDIT operation, NOT a regeneration. You must:
+1. KEEP the overall design, style, and composition
+2. ONLY make the SPECIFIC changes requested
+3. Everything NOT mentioned should stay EXACTLY the same
+
+Think of this like Photoshop editing - you're modifying specific elements,
+not creating a new design from scratch.
+
+══════════════════════════════════════════════════════════════════════
+📝 USER'S ORIGINAL REQUEST:
+══════════════════════════════════════════════════════════════════════
+"{user_request}"
+
+══════════════════════════════════════════════════════════════════════
+🔧 SPECIFIC CHANGES TO MAKE:
+══════════════════════════════════════════════════════════════════════
+{edit_analysis}
+
+══════════════════════════════════════════════════════════════════════
+⚠️ EDIT RULES (VERY IMPORTANT!):
+══════════════════════════════════════════════════════════════════════
+
+1. PRESERVE EVERYTHING ELSE:
+   - Same overall layout structure (unless explicitly asked to change)
+   - Same color scheme (unless explicitly asked to change)
+   - Same text content (unless explicitly asked to change)
+   - Same product positioning (unless explicitly asked to change)
+   - Same background style (unless explicitly asked to change)
+
+2. MAKE ONLY THE REQUESTED CHANGES:
+   - If user says "move logo to bottom" → ONLY move the logo
+   - If user says "change background to blue" → ONLY change background color
+   - If user says "make text bigger" → ONLY increase text size
+   - Do NOT make additional "improvements" unless asked
+
+3. COMMON EDIT TYPES:
+
+   LOGO POSITION:
+   - "logo arriba/top" → Logo in top area (left or right corner)
+   - "logo abajo/bottom" → Logo in bottom area (left or right corner)
+   - "logo izquierda/left" → Logo on left side
+   - "logo derecha/right" → Logo on right side
+   - "logo centro/center" → Logo in center (unusual but possible)
+   - "logo más grande/bigger" → Increase logo size
+   - "logo más pequeño/smaller" → Decrease logo size
+
+   TEXT CHANGES:
+   - Position changes (move up, down, left, right, center)
+   - Size changes (bigger, smaller)
+   - Color changes (specify new color)
+   - Content changes (replace specific text)
+   - Add/remove text effects (outline, shadow)
+
+   COLOR CHANGES:
+   - Background color
+   - Text color
+   - Accent/highlight colors
+   - Element-specific colors
+
+   ELEMENT CHANGES:
+   - Add decorative elements
+   - Remove decorative elements
+   - Resize elements
+   - Reposition elements
+
+4. QUALITY STANDARDS:
+   - The edited result should look PROFESSIONAL
+   - Changes should integrate seamlessly with existing design
+   - No artifacts or obvious "editing" marks
+   - Maintain visual harmony after changes
+
+══════════════════════════════════════════════════════════════════════
+BRAND CONTEXT:
+══════════════════════════════════════════════════════════════════════
+Company: {company_name}
+Brand Colors: {', '.join(colors)}
+
+══════════════════════════════════════════════════════════════════════
+⛔ DO NOT:
+══════════════════════════════════════════════════════════════════════
+- DO NOT redesign the entire post
+- DO NOT change elements that weren't mentioned
+- DO NOT add a border/frame if it didn't have one
+- DO NOT remove the border/frame if it had one (unless asked)
+- DO NOT change the product image (unless asked)
+- DO NOT change text content (unless asked)
+- DO NOT make spelling mistakes
+- DO NOT add extra decorations (unless asked)
+- DO NOT change the overall style/mood (unless asked)
+
+══════════════════════════════════════════════════════════════════════
+✅ FINAL CHECK:
+══════════════════════════════════════════════════════════════════════
+Before generating, verify:
+□ Did I ONLY make the changes the user requested?
+□ Is everything else EXACTLY the same as the original?
+□ Does the result still look professional and cohesive?
+□ Are all text elements spelled correctly?
+□ Does the logo appear only ONCE?
+
+The user liked this design - they just want small adjustments.
+Honor their original vision while making the specific changes requested."""
+
+
+# ============================================================================
+# INSTRUCCIÓN PARA POST A EDITAR
+# ============================================================================
+
+POST_TO_EDIT_INSTRUCTION = """
+══ POST TO EDIT - MODIFY THIS IMAGE ══
+This is the post the user wants to EDIT.
+Study it carefully - you need to make SPECIFIC changes while keeping everything else the same.
+The user LIKES this design, they just want small modifications.
+══════════════════════════════════════════════════════════════════════"""
