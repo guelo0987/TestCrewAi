@@ -148,6 +148,8 @@ class GeminiClient:
                     if hasattr(part, 'inline_data') and part.inline_data and part.inline_data.data:
                         return Image.open(io.BytesIO(part.inline_data.data))
             
+            if hasattr(response, 'text'):
+                print(f"⚠️ Respuesta de texto: {response.text[:500]}...")
             return None
             
         except Exception as e:
