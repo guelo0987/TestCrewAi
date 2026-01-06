@@ -9,6 +9,7 @@ import hashlib
 import httpx
 from typing import List, Optional, Dict, Any
 from uuid import UUID
+from datetime import datetime
 from PIL import Image
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
@@ -200,6 +201,117 @@ class ImageService:
 
 
 # ============================================================================
+# HELPERS
+# ============================================================================
+
+def extract_colors_from_json(colores_marca: Optional[Any]) -> List[str]:
+    """
+    Extrae los colores de la marca desde el campo JSON de la base de datos.
+    
+    El campo colores_marca puede venir como:
+    - Lista: ["#FF6B35", "#004E89", "#FFFFFF"]
+    - Dict: {"primary": "#FF6B35", "secondary": "#004E89", "background": "#FFFFFF"}
+    - Dict con otros nombres: {"color1": "#FF6B35", "color2": "#004E89", "color3": "#FFFFFF"}
+    - None o vacío
+    
+    Args:
+        colores_marca: Campo JSON de colores de la empresa
+        
+    Returns:
+        Lista de colores en formato hex (strings). Si no hay colores, retorna lista vacía.
+    """
+    if not colores_marca:
+        return []
+    
+    colors_list = []
+    
+    # Si es una lista, extraer directamente
+    if isinstance(colores_marca, list):
+        for color in colores_marca:
+            if isinstance(color, str) and color.strip():
+                colors_list.append(color.strip())
+    
+    # Si es un diccionario, extraer todos los valores que parezcan colores hex
+    elif isinstance(colores_marca, dict):
+        for key, value in colores_marca.items():
+            if isinstance(value, str) and value.strip():
+                # Verificar si parece un color hex (empieza con # y tiene 4-7 caracteres)
+                color_str = value.strip()
+                if color_str.startswith('#') and len(color_str) in [4, 5, 7, 9]:
+                    colors_list.append(color_str)
+                # También aceptar valores sin # si son hex válidos
+                elif len(color_str) in [3, 4, 6, 8] and all(c in '0123456789ABCDEFabcdef' for c in color_str):
+                    colors_list.append(f"#{color_str}")
+    
+    # Si es un string, intentar parsearlo como JSON
+    elif isinstance(colores_marca, str):
+        try:
+            import json
+            parsed = json.loads(colores_marca)
+            return extract_colors_from_json(parsed)
+        except:
+            # Si no se puede parsear, tratarlo como un solo color
+            if colores_marca.strip().startswith('#'):
+                colors_list.append(colores_marca.strip())
+    
+    return colors_list
+
+
+def ensure_colors_list(colores_marca: Optional[Any], empresa_nombre: str = "la empresa") -> List[str]:
+    """
+    Asegura que la lista de colores tenga al menos 3 elementos para los prompts.
+    Los prompts requieren colors[0], colors[1], colors[2].
+    
+    Primero extrae los colores del JSON, luego completa si es necesario.
+    Si no hay colores, lanza una excepción HTTP indicando que debe configurar los colores.
+    
+    Args:
+        colores_marca: Campo JSON de colores de la empresa (puede ser lista, dict, None)
+        empresa_nombre: Nombre de la empresa para el mensaje de error
+        
+    Returns:
+        Lista con al menos 3 colores en formato hex
+        
+    Raises:
+        HTTPException: Si no se encuentran colores en la configuración de la empresa
+    """
+    from fastapi import HTTPException, status
+    
+    # Extraer colores del JSON
+    colors = extract_colors_from_json(colores_marca)
+    
+    # Si no hay colores extraídos, lanzar error
+    if not colors or len(colors) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La empresa '{empresa_nombre}' no tiene colores de marca configurados. "
+                   f"Por favor, configure los colores de marca antes de generar posts. "
+                   f"Los colores deben estar en formato JSON como lista: [\"#FF6B35\", \"#004E89\", \"#FFFFFF\"] "
+                   f"o como diccionario: {{\"primary\": \"#FF6B35\", \"secondary\": \"#004E89\"}}"
+        )
+    
+    # Si tiene 3 o más, tomar solo los primeros 3
+    if len(colors) >= 3:
+        return colors[:3]
+    
+    # Si tiene menos de 3, completar repitiendo el último color disponible
+    # Esto mantiene la paleta de la marca sin introducir colores externos
+    while len(colors) < 3:
+        if colors:
+            # Repetir el último color disponible para mantener consistencia de marca
+            colors.append(colors[-1])
+        else:
+            # Este caso no debería ocurrir porque ya validamos arriba, pero por seguridad
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"La empresa '{empresa_nombre}' no tiene suficientes colores de marca configurados. "
+                       f"Se requieren al menos 3 colores en formato hex (ej: [\"#FF6B35\", \"#004E89\", \"#FFFFFF\"])."
+            )
+    
+    return colors
+
+
+# ============================================================================
 # SERVICIO DE CACHE
 # ============================================================================
 
@@ -309,11 +421,12 @@ class Analyzer:
     
     def analyze_user_intent(self, request: str, empresa: Empresa) -> str:
         """Analiza la intención del usuario"""
-        colors = ', '.join(empresa.colores_marca or [])
+        colors_list = ensure_colors_list(empresa.colores_marca, empresa.nombre)
+        colors_str = ', '.join(colors_list)
         prompt = get_user_intent_prompt(
             empresa.nombre, 
             empresa.descripcion or "", 
-            colors, 
+            colors_str, 
             request
         )
         return self.client.analyze_text(prompt)
@@ -543,7 +656,9 @@ class PostService:
         imagen_producto_url: str,
         modo: ModoEstiloEnum = ModoEstiloEnum.CREATIVE,
         nombre_interno: Optional[str] = None,
-        generar_ambas: bool = False
+        generar_ambas: bool = False,
+        es_programado: bool = False,
+        fecha_programada: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Crea un post con un producto único.
@@ -572,14 +687,25 @@ class PostService:
             return {"status": "error", "mensaje": "No se pudo cargar la imagen del producto"}
         
         # 3. Crear el post en la base de datos
+        # Parsear fecha_programada si está presente
+        fecha_programada_dt = None
+        if fecha_programada:
+            try:
+                fecha_programada_dt = datetime.fromisoformat(fecha_programada.replace('Z', '+00:00'))
+            except Exception:
+                fecha_programada_dt = None
+        
         post = Post(
             empresa_id=empresa.id,
             creado_por=user_id,
             nombre_interno=nombre_interno,
             request_usuario=request_usuario,
-            tipo_contenido=TipoContenido.PRODUCTO_UNICO,
+            tipo_contenido=TipoContenido.SINGLE,
             modo_estilo=ModoEstilo(modo.value),
-            imagenes_productos=[imagen_producto_url]
+            imagenes_productos=[imagen_producto_url],
+            es_programado=es_programado,
+            fecha_programada=fecha_programada_dt,
+            estado=EstadoPost.SCHEDULED if es_programado else EstadoPost.DRAFT
         )
         db.add(post)
         db.commit()
@@ -597,7 +723,7 @@ class PostService:
         base_parts = self._build_base_parts(reference_images, logo_image, product_image)
         
         results = {}
-        colors = empresa.colores_marca or ["#FF6B35", "#004E89", "#FFFFFF"]
+        colors = ensure_colors_list(empresa.colores_marca, empresa.nombre)
         
         # 6. Generar versiones
         if generar_ambas:
@@ -769,7 +895,7 @@ class PostService:
         message_analysis = self.analyzer.analyze_message_for_scratch(request_usuario, empresa)
         
         # 5. Construir prompt y partes
-        colors = empresa.colores_marca or ["#FF6B35", "#004E89", "#FFFFFF"]
+        colors = ensure_colors_list(empresa.colores_marca, empresa.nombre)
         prompt = get_scratch_prompt(
             style_guide, message_analysis, empresa.nombre, colors,
             request_usuario, user_intent
@@ -825,7 +951,9 @@ class PostService:
         imagenes_productos_urls: List[str],
         modo: ModoEstiloEnum = ModoEstiloEnum.CREATIVE,
         nombre_interno: Optional[str] = None,
-        generar_ambas: bool = False
+        generar_ambas: bool = False,
+        es_programado: bool = False,
+        fecha_programada: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Crea un post con múltiples productos (1-4).
@@ -853,14 +981,25 @@ class PostService:
             return {"status": "error", "mensaje": "No se pudieron cargar las imágenes de productos"}
         
         # 3. Crear el post en la base de datos
+        # Parsear fecha_programada si está presente
+        fecha_programada_dt = None
+        if fecha_programada:
+            try:
+                fecha_programada_dt = datetime.fromisoformat(fecha_programada.replace('Z', '+00:00'))
+            except Exception:
+                fecha_programada_dt = None
+        
         post = Post(
             empresa_id=empresa.id,
             creado_por=user_id,
             nombre_interno=nombre_interno,
             request_usuario=request_usuario,
-            tipo_contenido=TipoContenido.MULTI_PRODUCTO,
+            tipo_contenido=TipoContenido.MULTI,
             modo_estilo=ModoEstilo(modo.value),
-            imagenes_productos=imagenes_productos_urls
+            imagenes_productos=imagenes_productos_urls,
+            es_programado=es_programado,
+            fecha_programada=fecha_programada_dt,
+            estado=EstadoPost.SCHEDULED if es_programado else EstadoPost.DRAFT
         )
         db.add(post)
         db.commit()
@@ -878,7 +1017,7 @@ class PostService:
         base_parts = self._build_multi_product_parts(reference_images, logo_image, product_images)
         
         results = {}
-        colors = empresa.colores_marca or ["#FF6B35", "#004E89", "#FFFFFF"]
+        colors = ensure_colors_list(empresa.colores_marca, empresa.nombre)
         num_products = len(product_images)
         
         # 6. Generar versiones
@@ -1049,7 +1188,7 @@ class PostService:
         post_analysis = self.analyzer.analyze_post_for_regeneration(existing_post_img)
         
         # 5. Construir prompt de regeneración
-        colors = empresa.colores_marca or ["#FF6B35", "#004E89", "#FFFFFF"]
+        colors = ensure_colors_list(empresa.colores_marca, empresa.nombre)
         prompt = get_regeneration_prompt(
             style_guide, post_analysis, empresa.nombre, colors, feedback
         )
@@ -1156,7 +1295,7 @@ Use a DIFFERENT background, DIFFERENT layout structure, DIFFERENT visual approac
         edit_analysis = self.analyzer.analyze_edit_request(cambios)
         
         # 5. Construir prompt de edición
-        colors = empresa.colores_marca or ["#FF6B35", "#004E89", "#FFFFFF"]
+        colors = ensure_colors_list(empresa.colores_marca, empresa.nombre)
         prompt = get_edit_post_prompt(edit_analysis, empresa.nombre, colors, cambios)
         
         # 6. Construir partes (incluyendo imagen original)

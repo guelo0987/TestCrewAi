@@ -5,10 +5,15 @@ import enum
 
 
 class TipoContenido(str, enum.Enum):
-    """Tipo de contenido del post"""
-    PRODUCTO_UNICO = "producto_unico"      # Un solo producto
-    MULTI_PRODUCTO = "multi_producto"      # Múltiples productos (1-4)
-    SCRATCH = "scratch"                     # Sin producto, solo mensaje
+    """
+    Tipo de contenido del post.
+    
+    IMPORTANTE: Los valores deben coincidir EXACTAMENTE con el enum de la base de datos.
+    La base de datos usa valores en inglés en mayúsculas.
+    """
+    SINGLE = "SINGLE"           # Un solo producto
+    MULTI = "MULTI"             # Múltiples productos (1-4)
+    SCRATCH = "SCRATCH"         # Sin producto, solo mensaje
 
 
 class ModoEstilo(str, enum.Enum):

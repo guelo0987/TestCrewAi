@@ -2,7 +2,7 @@
 Controller para el sistema de generación de posts
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
@@ -21,10 +21,12 @@ from Dto.PostDto import (
     PostUpdateEstado,
     PostSelectVersion,
     PostSchedule,
-    VersionPostResponse
+    VersionPostResponse,
+    ModoEstiloEnum
 )
 from Services.post_service import post_service
 from Utils.jwt_handler import get_current_user
+from Utils.r2_storage import upload_image_to_r2
 
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
@@ -94,12 +96,22 @@ async def regenerar_cache(
 @router.post("/empresas/{empresa_id}/posts/producto")
 async def crear_post_producto(
     empresa_id: UUID,
-    datos: PostCreateProducto,
+    request_usuario: str = Form(...),
+    imagen_producto: UploadFile = File(...),
+    nombre_interno: Optional[str] = Form(None),
+    modo_estilo: str = Form("creative"),
+    generar_ambas_versiones: bool = Form(False),
+    es_programado: bool = Form(False),
+    fecha_programada: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
     """
     Crea un post con un producto único.
+    
+    El usuario sube la imagen del producto directamente.
+    La imagen se guarda en R2 solo si el post está programado (es_programado=True).
+    Si no está programado, la imagen se usa temporalmente para generar el post.
     
     Modos disponibles:
     - **creative**: Genera un ambiente contextual creativo
@@ -109,15 +121,31 @@ async def crear_post_producto(
     """
     empresa = get_empresa_or_404(db, empresa_id)
     
+    # Subir imagen del producto a R2
+    # Si está programado, guardar permanentemente en carpeta "productos/"
+    # Si NO está programado, guardar temporalmente en carpeta "temporal/" (se puede limpiar después)
+    # NOTA: Por ahora siempre guardamos en R2 para poder usarla en la generación
+    # En el futuro se puede implementar limpieza de archivos temporales
+    folder = "productos" if es_programado else "temporal"
+    upload_result = upload_image_to_r2(imagen_producto, folder=folder)
+    imagen_producto_url = upload_result["url"]
+    
+    # Convertir modo_estilo string a enum
+    modo_enum = ModoEstiloEnum.CREATIVE
+    if modo_estilo.lower() == "reference":
+        modo_enum = ModoEstiloEnum.REFERENCE
+    
     result = await post_service.create_post_with_product(
         db=db,
         empresa=empresa,
         user_id=current_user.id,
-        request_usuario=datos.request_usuario,
-        imagen_producto_url=datos.imagen_producto_url,
-        modo=datos.modo_estilo,
-        nombre_interno=datos.nombre_interno,
-        generar_ambas=datos.generar_ambas_versiones
+        request_usuario=request_usuario,
+        imagen_producto_url=imagen_producto_url,
+        modo=modo_enum,
+        nombre_interno=nombre_interno,
+        generar_ambas=generar_ambas_versiones,
+        es_programado=es_programado,
+        fecha_programada=fecha_programada
     )
     
     if result["status"] == "error":
@@ -129,26 +157,56 @@ async def crear_post_producto(
 @router.post("/empresas/{empresa_id}/posts/multi-producto")
 async def crear_post_multi_producto(
     empresa_id: UUID,
-    datos: PostCreateMultiProducto,
+    request_usuario: str = Form(...),
+    imagenes_productos: List[UploadFile] = File(...),
+    nombre_interno: Optional[str] = Form(None),
+    modo_estilo: str = Form("creative"),
+    generar_ambas_versiones: bool = Form(False),
+    es_programado: bool = Form(False),
+    fecha_programada: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
     """
     Crea un post con múltiples productos (1-4).
     
-    Envía una lista de URLs de imágenes de productos.
+    El usuario sube las imágenes de productos directamente.
+    Las imágenes se guardan en R2 solo si el post está programado (es_programado=True).
+    Si no está programado, las imágenes se usan temporalmente para generar el post.
     """
+    if len(imagenes_productos) < 1 or len(imagenes_productos) > 4:
+        raise HTTPException(
+            status_code=400,
+            detail="Se requieren entre 1 y 4 imágenes de productos"
+        )
+    
     empresa = get_empresa_or_404(db, empresa_id)
+    
+    # Subir imágenes de productos a R2
+    # Si está programado, guardar en carpeta "productos/"
+    # Si no está programado, guardar en carpeta "temporal/"
+    folder = "productos" if es_programado else "temporal"
+    imagenes_productos_urls = []
+    for imagen in imagenes_productos:
+        upload_result = upload_image_to_r2(imagen, folder=folder)
+        imagenes_productos_urls.append(upload_result["url"])
+    
+    # Convertir modo_estilo string a enum
+    modo_enum = ModoEstiloEnum.CREATIVE
+    if modo_estilo.lower() == "reference":
+        modo_enum = ModoEstiloEnum.REFERENCE
     
     result = await post_service.create_multi_product_post(
         db=db,
         empresa=empresa,
         user_id=current_user.id,
-        request_usuario=datos.request_usuario,
-        imagenes_productos_urls=datos.imagenes_productos_urls,
-        modo=datos.modo_estilo,
-        nombre_interno=datos.nombre_interno,
-        generar_ambas=datos.generar_ambas_versiones
+        request_usuario=request_usuario,
+        imagenes_productos_urls=imagenes_productos_urls,
+        modo=modo_enum,
+        nombre_interno=nombre_interno,
+        generar_ambas=generar_ambas_versiones,
+        es_programado=es_programado,
+        fecha_programada=fecha_programada
     )
     
     if result["status"] == "error":

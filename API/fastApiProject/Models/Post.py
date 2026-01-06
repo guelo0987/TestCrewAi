@@ -23,7 +23,7 @@ class Post(Base):
     
     # Configuración de generación
     es_programado = Column(Boolean, default=False)
-    tipo_contenido = Column(SQLEnum(TipoContenido), nullable=False, default=TipoContenido.PRODUCTO_UNICO)
+    tipo_contenido = Column(SQLEnum(TipoContenido), nullable=False, default=TipoContenido.SINGLE)
     modo_estilo = Column(SQLEnum(ModoEstilo), nullable=False, default=ModoEstilo.CREATIVE)
     
     # Estado del post

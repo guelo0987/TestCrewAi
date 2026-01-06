@@ -1262,8 +1262,8 @@ if __name__ == "__main__":
     # 1. MODO SCRATCH: Sin imagen de producto
     # ================================================================
     # result = ai.create_scratch(
-    #     request="Feliz dia de la restauracion Dominicana, laboraremos de 8am a 1pm",
-    #     output="posts/post_scratch.png"
+    #     request="Cerrados por inventario del 15 al 20 de diciembre",
+    #     output="posts/post_scratch21.png"
     # )
     
     # ================================================================
@@ -1321,11 +1321,11 @@ if __name__ == "__main__":
     # ================================================================
     # 7. EDITAR un post existente (cambios específicos):
     # ================================================================
-    result = ai.edit(
-        existing_post="posts/post_v8.png",
-        changes="Mueve el logo a la esquina inferior derecha",
-        output="posts/post_edited.png"
-    )
+    # result = ai.edit(
+    #     existing_post="posts/post_v8.png",
+    #     changes="Mueve el logo a la esquina inferior derecha",
+    #     output="posts/post_edited.png"
+    # )
     # 
     # Más ejemplos de ediciones:
     # - "Cambia el color del fondo a azul oscuro"
