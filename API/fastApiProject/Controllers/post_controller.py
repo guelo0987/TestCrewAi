@@ -26,7 +26,7 @@ from Dto.PostDto import (
 )
 from Services.post_service import post_service
 from Utils.jwt_handler import get_current_user
-from Utils.r2_storage import upload_image_to_r2
+# Ya no se usa upload_image_to_r2 para imágenes de usuario
 
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
@@ -109,9 +109,11 @@ async def crear_post_producto(
     """
     Crea un post con un producto único.
     
-    El usuario sube la imagen del producto directamente.
-    La imagen se guarda en R2 solo si el post está programado (es_programado=True).
-    Si no está programado, la imagen se usa temporalmente para generar el post.
+    IMPORTANTE: La imagen del producto NO se guarda en R2 ni en la BD.
+    Se usa temporalmente en memoria para generar el post inmediatamente.
+    Solo se guardan las imágenes GENERADAS del post en R2 (carpeta posts/).
+    
+    El post se genera inmediatamente y luego puede programarse para publicación futura.
     
     Modos disponibles:
     - **creative**: Genera un ambiente contextual creativo
@@ -119,16 +121,18 @@ async def crear_post_producto(
     
     Si `generar_ambas_versiones=True`, genera ambas versiones.
     """
+    from Services.post_service import ImageService
+    
     empresa = get_empresa_or_404(db, empresa_id)
     
-    # Subir imagen del producto a R2
-    # Si está programado, guardar permanentemente en carpeta "productos/"
-    # Si NO está programado, guardar temporalmente en carpeta "temporal/" (se puede limpiar después)
-    # NOTA: Por ahora siempre guardamos en R2 para poder usarla en la generación
-    # En el futuro se puede implementar limpieza de archivos temporales
-    folder = "productos" if es_programado else "temporal"
-    upload_result = upload_image_to_r2(imagen_producto, folder=folder)
-    imagen_producto_url = upload_result["url"]
+    # Cargar imagen del producto directamente en memoria (NO se guarda en R2)
+    product_image = ImageService.load_image_from_upload_file(imagen_producto)
+    
+    if not product_image:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pudo cargar la imagen del producto. Verifica que sea un archivo de imagen válido."
+        )
     
     # Convertir modo_estilo string a enum
     modo_enum = ModoEstiloEnum.CREATIVE
@@ -140,7 +144,7 @@ async def crear_post_producto(
         empresa=empresa,
         user_id=current_user.id,
         request_usuario=request_usuario,
-        imagen_producto_url=imagen_producto_url,
+        imagen_producto=product_image,  # PIL Image en memoria
         modo=modo_enum,
         nombre_interno=nombre_interno,
         generar_ambas=generar_ambas_versiones,
@@ -170,10 +174,14 @@ async def crear_post_multi_producto(
     """
     Crea un post con múltiples productos (1-4).
     
-    El usuario sube las imágenes de productos directamente.
-    Las imágenes se guardan en R2 solo si el post está programado (es_programado=True).
-    Si no está programado, las imágenes se usan temporalmente para generar el post.
+    IMPORTANTE: Las imágenes de productos NO se guardan en R2 ni en la BD.
+    Se usan temporalmente en memoria para generar el post inmediatamente.
+    Solo se guardan las imágenes GENERADAS del post en R2 (carpeta posts/).
+    
+    El post se genera inmediatamente y luego puede programarse para publicación futura.
     """
+    from Services.post_service import ImageService
+    
     if len(imagenes_productos) < 1 or len(imagenes_productos) > 4:
         raise HTTPException(
             status_code=400,
@@ -182,14 +190,16 @@ async def crear_post_multi_producto(
     
     empresa = get_empresa_or_404(db, empresa_id)
     
-    # Subir imágenes de productos a R2
-    # Si está programado, guardar en carpeta "productos/"
-    # Si no está programado, guardar en carpeta "temporal/"
-    folder = "productos" if es_programado else "temporal"
-    imagenes_productos_urls = []
+    # Cargar imágenes de productos directamente en memoria (NO se guardan en R2)
+    product_images = []
     for imagen in imagenes_productos:
-        upload_result = upload_image_to_r2(imagen, folder=folder)
-        imagenes_productos_urls.append(upload_result["url"])
+        img = ImageService.load_image_from_upload_file(imagen)
+        if not img:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No se pudo cargar una de las imágenes. Verifica que sean archivos de imagen válidos."
+            )
+        product_images.append(img)
     
     # Convertir modo_estilo string a enum
     modo_enum = ModoEstiloEnum.CREATIVE
@@ -201,7 +211,7 @@ async def crear_post_multi_producto(
         empresa=empresa,
         user_id=current_user.id,
         request_usuario=request_usuario,
-        imagenes_productos_urls=imagenes_productos_urls,
+        imagenes_productos=product_images,  # Lista de PIL Images en memoria
         modo=modo_enum,
         nombre_interno=nombre_interno,
         generar_ambas=generar_ambas_versiones,

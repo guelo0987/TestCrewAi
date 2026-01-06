@@ -203,7 +203,6 @@ class PostResponse(BaseModel):
     estado: EstadoPostEnum
     fecha_programada: Optional[datetime]
     fecha_publicacion: Optional[datetime]
-    imagenes_productos: Optional[List[str]]
     imagen_existente_url: Optional[str]
     version_elegida_id: Optional[UUID]
     creado_en: datetime

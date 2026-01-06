@@ -198,6 +198,36 @@ class ImageService:
         buffer = io.BytesIO()
         img.save(buffer, format=format)
         return buffer.getvalue()
+    
+    @staticmethod
+    def load_image_from_upload_file(file) -> Optional[Image.Image]:
+        """
+        Carga una imagen directamente desde un UploadFile de FastAPI.
+        No guarda el archivo, solo lo lee en memoria.
+        
+        Args:
+            file: UploadFile de FastAPI
+            
+        Returns:
+            PIL Image o None si hay error
+        """
+        try:
+            # Leer el contenido del archivo en memoria
+            file_content = file.file.read()
+            # Resetear el puntero para que pueda leerse de nuevo si es necesario
+            file.file.seek(0)
+            
+            # Abrir imagen desde bytes
+            img = Image.open(io.BytesIO(file_content))
+            
+            # Convertir a RGB si es necesario
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+            
+            return img
+        except Exception as e:
+            print(f"❌ Error cargando imagen desde UploadFile: {e}")
+            return None
 
 
 # ============================================================================
@@ -653,7 +683,7 @@ class PostService:
         empresa: Empresa,
         user_id: UUID,
         request_usuario: str,
-        imagen_producto_url: str,
+        imagen_producto: Image.Image,  # Cambiado: ahora recibe PIL Image directamente
         modo: ModoEstiloEnum = ModoEstiloEnum.CREATIVE,
         nombre_interno: Optional[str] = None,
         generar_ambas: bool = False,
@@ -663,28 +693,36 @@ class PostService:
         """
         Crea un post con un producto único.
         
+        IMPORTANTE: La imagen del producto NO se guarda en R2 ni en la BD.
+        Se usa temporalmente en memoria para generar el post.
+        Solo se guardan las imágenes GENERADAS del post en R2.
+        
         Args:
             db: Sesión de base de datos
             empresa: Empresa para la que se genera el post
             user_id: ID del usuario que crea el post
             request_usuario: Solicitud del usuario
-            imagen_producto_url: URL de la imagen del producto
+            imagen_producto: PIL Image del producto (en memoria, no guardada)
             modo: CREATIVE o REFERENCE
             nombre_interno: Nombre interno opcional
             generar_ambas: Si True, genera ambas versiones
+            es_programado: Si True, el post se programa para publicación futura
+            fecha_programada: Fecha de programación (formato ISO string)
         """
         print(f"\n🎨 Creando post para {empresa.nombre}")
+        
+        if not imagen_producto:
+            return {"status": "error", "mensaje": "No se pudo cargar la imagen del producto"}
         
         # 1. Obtener style_guide
         style_guide = await self.get_or_create_style_guide(db, empresa)
         
-        # 2. Cargar imágenes
+        # 2. Cargar imágenes de referencia y logo
         reference_images = await self._load_reference_images(db, empresa.id)
         logo_image = await self.load_logo(empresa)
-        product_image = self.image_service.load_image_from_url_sync(imagen_producto_url)
         
-        if not product_image:
-            return {"status": "error", "mensaje": "No se pudo cargar la imagen del producto"}
+        # La imagen del producto ya está en memoria, no necesitamos cargarla desde URL
+        product_image = imagen_producto
         
         # 3. Crear el post en la base de datos
         # Parsear fecha_programada si está presente
@@ -702,7 +740,6 @@ class PostService:
             request_usuario=request_usuario,
             tipo_contenido=TipoContenido.SINGLE,
             modo_estilo=ModoEstilo(modo.value),
-            imagenes_productos=[imagen_producto_url],
             es_programado=es_programado,
             fecha_programada=fecha_programada_dt,
             estado=EstadoPost.SCHEDULED if es_programado else EstadoPost.DRAFT
@@ -948,7 +985,7 @@ class PostService:
         empresa: Empresa,
         user_id: UUID,
         request_usuario: str,
-        imagenes_productos_urls: List[str],
+        imagenes_productos: List[Image.Image],  # Cambiado: ahora recibe PIL Images directamente
         modo: ModoEstiloEnum = ModoEstiloEnum.CREATIVE,
         nombre_interno: Optional[str] = None,
         generar_ambas: bool = False,
@@ -957,8 +994,12 @@ class PostService:
     ) -> Dict[str, Any]:
         """
         Crea un post con múltiples productos (1-4).
+        
+        IMPORTANTE: Las imágenes de productos NO se guardan en R2 ni en la BD.
+        Se usan temporalmente en memoria para generar el post.
+        Solo se guardan las imágenes GENERADAS del post en R2.
         """
-        num_products = len(imagenes_productos_urls)
+        num_products = len(imagenes_productos)
         if num_products < 1 or num_products > 4:
             return {"status": "error", "mensaje": "Se requieren entre 1 y 4 productos"}
         
@@ -967,18 +1008,12 @@ class PostService:
         # 1. Obtener style_guide
         style_guide = await self.get_or_create_style_guide(db, empresa)
         
-        # 2. Cargar imágenes
+        # 2. Cargar imágenes de referencia y logo
         reference_images = await self._load_reference_images(db, empresa.id)
         logo_image = await self.load_logo(empresa)
         
-        product_images = []
-        for url in imagenes_productos_urls:
-            img = self.image_service.load_image_from_url_sync(url)
-            if img:
-                product_images.append(img)
-        
-        if len(product_images) == 0:
-            return {"status": "error", "mensaje": "No se pudieron cargar las imágenes de productos"}
+        # Las imágenes de productos ya están en memoria, no necesitamos cargarlas desde URL
+        product_images = imagenes_productos
         
         # 3. Crear el post en la base de datos
         # Parsear fecha_programada si está presente
@@ -996,7 +1031,6 @@ class PostService:
             request_usuario=request_usuario,
             tipo_contenido=TipoContenido.MULTI,
             modo_estilo=ModoEstilo(modo.value),
-            imagenes_productos=imagenes_productos_urls,
             es_programado=es_programado,
             fecha_programada=fecha_programada_dt,
             estado=EstadoPost.SCHEDULED if es_programado else EstadoPost.DRAFT

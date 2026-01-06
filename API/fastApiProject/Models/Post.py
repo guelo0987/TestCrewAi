@@ -33,12 +33,6 @@ class Post(Base):
     fecha_programada = Column(DateTime(timezone=False), nullable=True)
     fecha_publicacion = Column(DateTime(timezone=False), nullable=True)
     
-    # Imágenes de productos (URLs en JSON array)
-    # Para PRODUCTO_UNICO: ["url1"]
-    # Para MULTI_PRODUCTO: ["url1", "url2", "url3", "url4"]
-    # Para SCRATCH: null o []
-    imagenes_productos = Column(JSON, nullable=True)
-    
     # Si es edición/regeneración de un post existente
     imagen_existente_url = Column(Text, nullable=True)
     
