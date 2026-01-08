@@ -13,9 +13,14 @@ from enum import Enum
 # ============================================================================
 
 class TipoContenidoEnum(str, Enum):
-    PRODUCTO_UNICO = "producto_unico"
-    MULTI_PRODUCTO = "multi_producto"
-    SCRATCH = "scratch"
+    """
+    IMPORTANTE: Los valores deben coincidir EXACTAMENTE con el enum de la base de datos.
+    La base de datos usa valores en inglés en mayúsculas.
+    """
+    SINGLE = "SINGLE"           # Un solo producto
+    MULTI = "MULTI"             # Múltiples productos (1-4)
+    SCRATCH = "SCRATCH"         # Sin producto, solo mensaje
+    EXISTING = "EXISTING"       # Post ya existente (para programar)
 
 
 class ModoEstiloEnum(str, Enum):

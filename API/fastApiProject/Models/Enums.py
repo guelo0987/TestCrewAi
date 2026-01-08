@@ -14,6 +14,7 @@ class TipoContenido(str, enum.Enum):
     SINGLE = "SINGLE"           # Un solo producto
     MULTI = "MULTI"             # Múltiples productos (1-4)
     SCRATCH = "SCRATCH"         # Sin producto, solo mensaje
+    EXISTING = "EXISTING"       # Post ya existente (para programar)
 
 
 class ModoEstilo(str, enum.Enum):
