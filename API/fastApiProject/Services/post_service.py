@@ -3,6 +3,7 @@ Servicio de Generación de Posts de Instagram
 Contiene toda la lógica de generación conectada a la base de datos.
 """
 
+import asyncio
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
@@ -101,14 +102,15 @@ class PostService:
             print(f"⚠️ No hay referencias para empresa {empresa.nombre}")
             return ""
         
-        # 4. Cargar imágenes de referencias desde R2
+        # 4. Cargar imágenes de referencias desde R2 (operaciones bloqueantes en hilos)
         reference_images = []
         total_urls = 0
         for ref in referencias:
             if ref.imagenes_urls:
                 for url in ref.imagenes_urls:
                     total_urls += 1
-                    img = self.image_service.load_image_from_url_sync(url)
+                    # ✅ Ejecutar en hilo para no bloquear el event loop
+                    img = await asyncio.to_thread(self.image_service.load_image_from_url_sync, url)
                     if img:
                         reference_images.append(img)
                         if len(reference_images) >= self.config.max_references:
@@ -122,9 +124,9 @@ class PostService:
             print(f"⚠️ No se pudieron cargar imágenes de referencia")
             return ""
         
-        # 5. Analizar referencias con Gemini (esto es costoso, por eso usamos cache)
+        # 5. Analizar referencias con Gemini (operación MUY bloqueante - en hilo)
         print(f"🤖 Analizando {len(reference_images)} referencias con Gemini...")
-        style_guide = self.analyzer.deep_analyze_references(reference_images)
+        style_guide = await asyncio.to_thread(self.analyzer.deep_analyze_references, reference_images)
         
         # 6. Guardar en cache (tabla CacheEmpresa)
         CacheService.save_style_guide(db, empresa.id, style_guide, referencias)
@@ -136,7 +138,8 @@ class PostService:
         """Carga el logo de la empresa"""
         if not empresa.logo_url:
             return None
-        return self.image_service.load_image_from_url_sync(empresa.logo_url)
+        # ✅ Ejecutar en hilo para no bloquear el event loop
+        return await asyncio.to_thread(self.image_service.load_image_from_url_sync, empresa.logo_url)
     
     # =========================================================================
     # MÉTODOS AUXILIARES
@@ -206,7 +209,8 @@ class PostService:
         for ref in referencias:
             if ref.imagenes_urls:
                 for url in ref.imagenes_urls:
-                    img = self.image_service.load_image_from_url_sync(url)
+                    # ✅ Ejecutar en hilo para no bloquear el event loop
+                    img = await asyncio.to_thread(self.image_service.load_image_from_url_sync, url)
                     if img:
                         images.append(img)
                         if len(images) >= self.config.max_references:
@@ -280,16 +284,32 @@ class PostService:
             estado=EstadoPost.SCHEDULED if es_programado else EstadoPost.DRAFT
         )
         db.add(post)
-        db.commit()
+        db.commit()  # ✅ Commit temprano - libera la transacción
         db.refresh(post)
+        post_id = post.id  # Guardar ID para usar después
         
-        # 4. Análisis
+        # ✅ TRANSACCIÓN CERRADA - Las siguientes operaciones NO necesitan DB abierta
+        # Esto permite que otros requests usen la DB mientras procesamos
+        
+        # 4. Análisis (operaciones largas bloqueantes - ejecutar en hilos)
         print("📊 Analizando...")
-        user_intent = self.analyzer.analyze_user_intent(request_usuario, empresa)
-        product_info = self.analyzer.analyze_product_basic(product_image)
-        creative_context = ""
+        # ✅ Ejecutar análisis en paralelo cuando sea posible
         if modo == ModoEstiloEnum.CREATIVE or generar_ambas:
-            creative_context = self.analyzer.analyze_product_for_context(product_image)
+            # Ejecutar user_intent y product_basic en paralelo, luego creative_context
+            user_intent, product_info = await asyncio.gather(
+                asyncio.to_thread(self.analyzer.analyze_user_intent, request_usuario, empresa),
+                asyncio.to_thread(self.analyzer.analyze_product_basic, product_image)
+            )
+            creative_context = await asyncio.to_thread(
+                self.analyzer.analyze_product_for_context, product_image
+            )
+        else:
+            # Solo necesitamos user_intent y product_basic
+            user_intent, product_info = await asyncio.gather(
+                asyncio.to_thread(self.analyzer.analyze_user_intent, request_usuario, empresa),
+                asyncio.to_thread(self.analyzer.analyze_product_basic, product_image)
+            )
+            creative_context = ""
         
         # 5. Construir partes base
         base_parts = self._build_base_parts(reference_images, logo_image, product_image)
@@ -297,7 +317,7 @@ class PostService:
         results = {}
         colors = ensure_colors_list(empresa.colores_marca, empresa.nombre)
         
-        # 6. Generar versiones
+        # 6. Generar versiones (operaciones MUY largas - NO necesitan DB)
         if generar_ambas:
             # Generar REFERENCE
             print("📋 Generando versión REFERENCE...")
@@ -306,20 +326,23 @@ class PostService:
                 request_usuario, user_intent, product_info
             )
             ref_parts = base_parts + [types.Part.from_text(text=f"\n{ref_prompt}")]
-            ref_img = self.gemini_service.generate_image(ref_parts)
+            # ✅ Ejecutar generación en hilo para no bloquear el event loop
+            ref_img = await asyncio.to_thread(self.gemini_service.generate_image, ref_parts)
             
             if ref_img:
-                filename = f"post_{post.id}_v1_reference.png"
+                filename = f"post_{post_id}_v1_reference.png"
                 upload_result = upload_pil_image_to_r2(
                     ref_img, folder="posts", custom_filename=f"posts/{filename}", format="PNG"
                 )
                 ref_url = upload_result["url"]
                 
+                # ✅ ABRIR TRANSACCIÓN SOLO PARA GUARDAR
                 version_ref = VersionPost(
-                    post_id=post.id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
+                    post_id=post_id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
                     variante="reference", imagen_url=ref_url
                 )
                 db.add(version_ref)
+                db.commit()  # ✅ Commit inmediato - libera transacción
                 results["reference"] = GenerationResult(
                     status="success", version_id=version_ref.id,
                     imagen_url=ref_url, modo="reference"
@@ -332,20 +355,23 @@ class PostService:
                 request_usuario, user_intent, product_info
             )
             creative_parts = base_parts + [types.Part.from_text(text=f"\n{creative_prompt}")]
-            creative_img = self.gemini_service.generate_image(creative_parts)
+            # ✅ Ejecutar generación en hilo para no bloquear el event loop
+            creative_img = await asyncio.to_thread(self.gemini_service.generate_image, creative_parts)
             
             if creative_img:
-                filename = f"post_{post.id}_v1_creative.png"
+                filename = f"post_{post_id}_v1_creative.png"
                 upload_result = upload_pil_image_to_r2(
                     creative_img, folder="posts", custom_filename=f"posts/{filename}", format="PNG"
                 )
                 creative_url = upload_result["url"]
                 
+                # ✅ ABRIR TRANSACCIÓN SOLO PARA GUARDAR
                 version_creative = VersionPost(
-                    post_id=post.id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
+                    post_id=post_id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
                     variante="creative", imagen_url=creative_url
                 )
                 db.add(version_creative)
+                db.commit()  # ✅ Commit inmediato - libera transacción
                 results["creative"] = GenerationResult(
                     status="success", version_id=version_creative.id,
                     imagen_url=creative_url, modo="creative"
@@ -364,20 +390,23 @@ class PostService:
                 )
             
             parts = base_parts + [types.Part.from_text(text=f"\n{prompt}")]
-            generated = self.gemini_service.generate_image(parts)
+            # ✅ Ejecutar generación en hilo para no bloquear el event loop
+            generated = await asyncio.to_thread(self.gemini_service.generate_image, parts)
             
             if generated:
-                filename = f"post_{post.id}_v1_{modo.value}.png"
+                filename = f"post_{post_id}_v1_{modo.value}.png"
                 upload_result = upload_pil_image_to_r2(
                     generated, folder="posts", custom_filename=f"posts/{filename}", format="PNG"
                 )
                 img_url = upload_result["url"]
                 
+                # ✅ ABRIR TRANSACCIÓN SOLO PARA GUARDAR
                 version = VersionPost(
-                    post_id=post.id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
+                    post_id=post_id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
                     variante=modo.value, imagen_url=img_url
                 )
                 db.add(version)
+                db.commit()  # ✅ Commit inmediato - libera transacción
                 results["generated"] = GenerationResult(
                     status="success", version_id=version.id,
                     imagen_url=img_url, modo=modo.value
@@ -387,11 +416,9 @@ class PostService:
                     status="error", mensaje="Falló la generación de la imagen"
                 )
         
-        db.commit()
-        
         return {
             "status": "success",
-            "post_id": post.id,
+            "post_id": post_id,
             "results": results
         }
     
@@ -427,13 +454,19 @@ class PostService:
             modo_estilo=ModoEstilo.CREATIVE
         )
         db.add(post)
-        db.commit()
+        db.commit()  # ✅ Commit temprano - libera la transacción
         db.refresh(post)
+        post_id = post.id  # Guardar ID para usar después
         
-        # 4. Análisis
+        # ✅ TRANSACCIÓN CERRADA - Las siguientes operaciones NO necesitan DB abierta
+        
+        # 4. Análisis (operaciones largas bloqueantes - ejecutar en hilos en paralelo)
         print("📊 Analizando mensaje...")
-        user_intent = self.analyzer.analyze_user_intent(request_usuario, empresa)
-        message_analysis = self.analyzer.analyze_message_for_scratch(request_usuario, empresa)
+        # ✅ Ejecutar ambos análisis en paralelo para mayor velocidad
+        user_intent, message_analysis = await asyncio.gather(
+            asyncio.to_thread(self.analyzer.analyze_user_intent, request_usuario, empresa),
+            asyncio.to_thread(self.analyzer.analyze_message_for_scratch, request_usuario, empresa)
+        )
         
         # 5. Construir prompt y partes
         colors = ensure_colors_list(empresa.colores_marca, empresa.nombre)
@@ -445,27 +478,29 @@ class PostService:
         parts = self._build_base_parts(reference_images, logo_image)
         parts.append(types.Part.from_text(text=f"\n{prompt}"))
         
-        # 6. Generar
+        # 6. Generar (operación MUY larga bloqueante - ejecutar en hilo)
         print("🚀 Generando imagen...")
-        generated = self.gemini_service.generate_image(parts)
+        # ✅ Ejecutar generación en hilo para no bloquear el event loop
+        generated = await asyncio.to_thread(self.gemini_service.generate_image, parts)
         
         if generated:
-            filename = f"post_{post.id}_v1_scratch.png"
+            filename = f"post_{post_id}_v1_scratch.png"
             upload_result = upload_pil_image_to_r2(
                 generated, folder="posts", custom_filename=f"posts/{filename}", format="PNG"
             )
             img_url = upload_result["url"]
             
+            # ✅ ABRIR TRANSACCIÓN SOLO PARA GUARDAR
             version = VersionPost(
-                post_id=post.id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
+                post_id=post_id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
                 variante="scratch", imagen_url=img_url
             )
             db.add(version)
-            db.commit()
+            db.commit()  # ✅ Commit inmediato - libera transacción
             
             return {
                 "status": "success",
-                "post_id": post.id,
+                "post_id": post_id,
                 "version_id": version.id,
                 "imagen_url": img_url
             }
@@ -530,16 +565,31 @@ class PostService:
             estado=EstadoPost.SCHEDULED if es_programado else EstadoPost.DRAFT
         )
         db.add(post)
-        db.commit()
+        db.commit()  # ✅ Commit temprano - libera la transacción
         db.refresh(post)
+        post_id = post.id  # Guardar ID para usar después
         
-        # 4. Análisis
+        # ✅ TRANSACCIÓN CERRADA - Las siguientes operaciones NO necesitan DB abierta
+        
+        # 4. Análisis (operaciones largas bloqueantes - ejecutar en hilos)
         print("📊 Analizando...")
-        user_intent = self.analyzer.analyze_user_intent(request_usuario, empresa)
-        products_info = self.analyzer.analyze_multiple_products(product_images)
-        creative_context = ""
+        # ✅ Ejecutar análisis en paralelo cuando sea posible
         if modo == ModoEstiloEnum.CREATIVE or generar_ambas:
-            creative_context = self.analyzer.analyze_multiple_products_for_context(product_images)
+            # Ejecutar user_intent y products_info en paralelo, luego creative_context
+            user_intent, products_info = await asyncio.gather(
+                asyncio.to_thread(self.analyzer.analyze_user_intent, request_usuario, empresa),
+                asyncio.to_thread(self.analyzer.analyze_multiple_products, product_images)
+            )
+            creative_context = await asyncio.to_thread(
+                self.analyzer.analyze_multiple_products_for_context, product_images
+            )
+        else:
+            # Solo necesitamos user_intent y products_info
+            user_intent, products_info = await asyncio.gather(
+                asyncio.to_thread(self.analyzer.analyze_user_intent, request_usuario, empresa),
+                asyncio.to_thread(self.analyzer.analyze_multiple_products, product_images)
+            )
+            creative_context = ""
         
         # 5. Construir partes base
         base_parts = self._build_multi_product_parts(reference_images, logo_image, product_images)
@@ -548,7 +598,7 @@ class PostService:
         colors = ensure_colors_list(empresa.colores_marca, empresa.nombre)
         num_products = len(product_images)
         
-        # 6. Generar versiones
+        # 6. Generar versiones (operaciones MUY largas - NO necesitan DB)
         if generar_ambas:
             # REFERENCE
             print("📋 Generando versión REFERENCE...")
@@ -557,20 +607,23 @@ class PostService:
                 request_usuario, user_intent, products_info, num_products
             )
             ref_parts = base_parts + [types.Part.from_text(text=f"\n{ref_prompt}")]
-            ref_img = self.gemini_service.generate_image(ref_parts)
+            # ✅ Ejecutar generación en hilo para no bloquear el event loop
+            ref_img = await asyncio.to_thread(self.gemini_service.generate_image, ref_parts)
             
             if ref_img:
-                filename = f"post_{post.id}_v1_reference.png"
+                filename = f"post_{post_id}_v1_reference.png"
                 upload_result = upload_pil_image_to_r2(
                     ref_img, folder="posts", custom_filename=f"posts/{filename}", format="PNG"
                 )
                 ref_url = upload_result["url"]
                 
+                # ✅ ABRIR TRANSACCIÓN SOLO PARA GUARDAR
                 version_ref = VersionPost(
-                    post_id=post.id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
+                    post_id=post_id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
                     variante="reference", imagen_url=ref_url
                 )
                 db.add(version_ref)
+                db.commit()  # ✅ Commit inmediato - libera transacción
                 results["reference"] = GenerationResult(
                     status="success", version_id=version_ref.id,
                     imagen_url=ref_url, modo="reference"
@@ -583,20 +636,23 @@ class PostService:
                 request_usuario, user_intent, products_info, num_products
             )
             creative_parts = base_parts + [types.Part.from_text(text=f"\n{creative_prompt}")]
-            creative_img = self.gemini_service.generate_image(creative_parts)
+            # ✅ Ejecutar generación en hilo para no bloquear el event loop
+            creative_img = await asyncio.to_thread(self.gemini_service.generate_image, creative_parts)
             
             if creative_img:
-                filename = f"post_{post.id}_v1_creative.png"
+                filename = f"post_{post_id}_v1_creative.png"
                 upload_result = upload_pil_image_to_r2(
                     creative_img, folder="posts", custom_filename=f"posts/{filename}", format="PNG"
                 )
                 creative_url = upload_result["url"]
                 
+                # ✅ ABRIR TRANSACCIÓN SOLO PARA GUARDAR
                 version_creative = VersionPost(
-                    post_id=post.id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
+                    post_id=post_id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
                     variante="creative", imagen_url=creative_url
                 )
                 db.add(version_creative)
+                db.commit()  # ✅ Commit inmediato - libera transacción
                 results["creative"] = GenerationResult(
                     status="success", version_id=version_creative.id,
                     imagen_url=creative_url, modo="creative"
@@ -615,30 +671,31 @@ class PostService:
                 )
             
             parts = base_parts + [types.Part.from_text(text=f"\n{prompt}")]
-            generated = self.gemini_service.generate_image(parts)
+            # ✅ Ejecutar generación en hilo para no bloquear el event loop
+            generated = await asyncio.to_thread(self.gemini_service.generate_image, parts)
             
             if generated:
-                filename = f"post_{post.id}_v1_{modo.value}.png"
+                filename = f"post_{post_id}_v1_{modo.value}.png"
                 upload_result = upload_pil_image_to_r2(
                     generated, folder="posts", custom_filename=f"posts/{filename}", format="PNG"
                 )
                 img_url = upload_result["url"]
                 
+                # ✅ ABRIR TRANSACCIÓN SOLO PARA GUARDAR
                 version = VersionPost(
-                    post_id=post.id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
+                    post_id=post_id, numero_version=1, tipo_version=TipoVersion.ORIGINAL,
                     variante=modo.value, imagen_url=img_url
                 )
                 db.add(version)
+                db.commit()  # ✅ Commit inmediato - libera transacción
                 results["generated"] = GenerationResult(
                     status="success", version_id=version.id,
                     imagen_url=img_url, modo=modo.value
                 )
         
-        db.commit()
-        
         return {
             "status": "success",
-            "post_id": post.id,
+            "post_id": post_id,
             "num_products": num_products,
             "results": results
         }
@@ -658,7 +715,7 @@ class PostService:
         """Regenera un post existente creando una versión completamente nueva"""
         print(f"\n🔄 Regenerando post {post.id}")
         
-        # 1. Obtener versión base
+        # 1. Obtener versión base (operación rápida)
         if version_base_id:
             version_base = db.query(VersionPost).filter(
                 VersionPost.id == version_base_id, VersionPost.post_id == post.id
@@ -671,19 +728,33 @@ class PostService:
         if not version_base or not version_base.imagen_url:
             return {"status": "error", "mensaje": "No se encontró versión para regenerar"}
         
-        # 2. Cargar imagen del post existente
-        existing_post_img = self.image_service.load_image_from_url_sync(version_base.imagen_url)
+        # Guardar datos necesarios antes de cerrar transacción
+        post_id = post.id
+        version_base_id_saved = version_base.id
+        imagen_url_base = version_base.imagen_url
+        next_version = self._get_next_version_number(db, post.id)
+        
+        # ✅ CERRAR TRANSACCIÓN - Las siguientes operaciones NO necesitan DB abierta
+        
+        # 2. Cargar imagen del post existente (operación bloqueante - ejecutar en hilo)
+        existing_post_img = await asyncio.to_thread(
+            self.image_service.load_image_from_url_sync, imagen_url_base
+        )
         if not existing_post_img:
             return {"status": "error", "mensaje": "No se pudo cargar la imagen del post existente"}
         
-        # 3. Obtener style_guide y referencias
+        # 3. Obtener style_guide y referencias (necesita DB, pero es rápido)
         style_guide = await self.get_or_create_style_guide(db, empresa)
         reference_images = await self._load_reference_images(db, empresa.id)
         logo_image = await self.load_logo(empresa)
         
-        # 4. Analizar post existente
+        # ✅ CERRAR TRANSACCIÓN - Las siguientes operaciones NO necesitan DB abierta
+        
+        # 4. Analizar post existente (operación larga bloqueante - ejecutar en hilo)
         print("📊 Analizando post existente...")
-        post_analysis = self.analyzer.analyze_post_for_regeneration(existing_post_img)
+        post_analysis = await asyncio.to_thread(
+            self.analyzer.analyze_post_for_regeneration, existing_post_img
+        )
         
         # 5. Construir prompt de regeneración
         colors = ensure_colors_list(empresa.colores_marca, empresa.nombre)
@@ -710,29 +781,30 @@ Use a DIFFERENT background, DIFFERENT layout structure, DIFFERENT visual approac
         
         parts.append(types.Part.from_text(text=f"\n{prompt}"))
         
-        # 7. Generar
+        # 7. Generar (operación MUY larga bloqueante - ejecutar en hilo)
         print("🚀 Generando nueva versión...")
-        generated = self.gemini_service.generate_image(parts)
+        # ✅ Ejecutar generación en hilo para no bloquear el event loop
+        generated = await asyncio.to_thread(self.gemini_service.generate_image, parts)
         
         if generated:
-            next_version = self._get_next_version_number(db, post.id)
-            filename = f"post_{post.id}_v{next_version}_regeneration.png"
+            filename = f"post_{post_id}_v{next_version}_regeneration.png"
             upload_result = upload_pil_image_to_r2(
                 generated, folder="posts", custom_filename=f"posts/{filename}", format="PNG"
             )
             img_url = upload_result["url"]
             
+            # ✅ ABRIR TRANSACCIÓN SOLO PARA GUARDAR
             version = VersionPost(
-                post_id=post.id, version_padre_id=version_base.id,
+                post_id=post_id, version_padre_id=version_base_id_saved,
                 numero_version=next_version, tipo_version=TipoVersion.REGENERACION,
                 imagen_url=img_url, cambios_solicitados=feedback
             )
             db.add(version)
-            db.commit()
+            db.commit()  # ✅ Commit inmediato - libera transacción
             
             return {
                 "status": "success",
-                "post_id": post.id,
+                "post_id": post_id,
                 "version_id": version.id,
                 "numero_version": next_version,
                 "imagen_url": img_url
@@ -755,7 +827,7 @@ Use a DIFFERENT background, DIFFERENT layout structure, DIFFERENT visual approac
         """Edita un post existente haciendo cambios específicos"""
         print(f"\n✏️ Editando post {post.id}")
         
-        # 1. Obtener versión base
+        # 1. Obtener versión base (operación rápida)
         if version_base_id:
             version_base = db.query(VersionPost).filter(
                 VersionPost.id == version_base_id, VersionPost.post_id == post.id
@@ -768,18 +840,30 @@ Use a DIFFERENT background, DIFFERENT layout structure, DIFFERENT visual approac
         if not version_base or not version_base.imagen_url:
             return {"status": "error", "mensaje": "No se encontró versión para editar"}
         
-        # 2. Cargar imagen del post existente
-        existing_post_img = self.image_service.load_image_from_url_sync(version_base.imagen_url)
+        # Guardar datos necesarios antes de cerrar transacción
+        post_id = post.id
+        version_base_id_saved = version_base.id
+        imagen_url_base = version_base.imagen_url
+        next_version = self._get_next_version_number(db, post.id)
+        
+        # ✅ CERRAR TRANSACCIÓN - Las siguientes operaciones NO necesitan DB abierta
+        
+        # 2. Cargar imagen del post existente (operación bloqueante - ejecutar en hilo)
+        existing_post_img = await asyncio.to_thread(
+            self.image_service.load_image_from_url_sync, imagen_url_base
+        )
         if not existing_post_img:
             return {"status": "error", "mensaje": "No se pudo cargar la imagen del post existente"}
         
-        # 3. Cargar referencias y logo
+        # 3. Cargar referencias y logo (necesita DB, pero es rápido)
         reference_images = await self._load_reference_images(db, empresa.id)
         logo_image = await self.load_logo(empresa)
         
-        # 4. Analizar solicitud de edición
+        # ✅ CERRAR TRANSACCIÓN - Las siguientes operaciones NO necesitan DB abierta
+        
+        # 4. Analizar solicitud de edición (operación larga bloqueante - ejecutar en hilo)
         print("📊 Analizando cambios solicitados...")
-        edit_analysis = self.analyzer.analyze_edit_request(cambios)
+        edit_analysis = await asyncio.to_thread(self.analyzer.analyze_edit_request, cambios)
         
         # 5. Construir prompt de edición
         colors = ensure_colors_list(empresa.colores_marca, empresa.nombre)
@@ -808,29 +892,30 @@ This is the company logo. Use it ONLY if the edit requires moving or resizing th
         
         parts.append(types.Part.from_text(text=f"\n{prompt}"))
         
-        # 7. Generar
+        # 7. Generar (operación MUY larga bloqueante - ejecutar en hilo)
         print("🚀 Aplicando cambios...")
-        generated = self.gemini_service.generate_image(parts)
+        # ✅ Ejecutar generación en hilo para no bloquear el event loop
+        generated = await asyncio.to_thread(self.gemini_service.generate_image, parts)
         
         if generated:
-            next_version = self._get_next_version_number(db, post.id)
-            filename = f"post_{post.id}_v{next_version}_edit.png"
+            filename = f"post_{post_id}_v{next_version}_edit.png"
             upload_result = upload_pil_image_to_r2(
                 generated, folder="posts", custom_filename=f"posts/{filename}", format="PNG"
             )
             img_url = upload_result["url"]
             
+            # ✅ ABRIR TRANSACCIÓN SOLO PARA GUARDAR
             version = VersionPost(
-                post_id=post.id, version_padre_id=version_base.id,
+                post_id=post_id, version_padre_id=version_base_id_saved,
                 numero_version=next_version, tipo_version=TipoVersion.EDICION,
                 imagen_url=img_url, cambios_solicitados=cambios
             )
             db.add(version)
-            db.commit()
+            db.commit()  # ✅ Commit inmediato - libera transacción
             
             return {
                 "status": "success",
-                "post_id": post.id,
+                "post_id": post_id,
                 "version_id": version.id,
                 "numero_version": next_version,
                 "imagen_url": img_url,
