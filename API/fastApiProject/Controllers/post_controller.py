@@ -25,6 +25,7 @@ from Dto.PostDto import (
     ModoEstiloEnum
 )
 from Services.post_service import post_service
+from Services.image_service import ImageService
 from Utils.jwt_handler import get_current_user
 # Ya no se usa upload_image_to_r2 para imágenes de usuario
 
@@ -121,8 +122,6 @@ async def crear_post_producto(
     
     Si `generar_ambas_versiones=True`, genera ambas versiones.
     """
-    from Services.post_service import ImageService
-    
     empresa = get_empresa_or_404(db, empresa_id)
     
     # Cargar imagen del producto directamente en memoria (NO se guarda en R2)
@@ -180,8 +179,6 @@ async def crear_post_multi_producto(
     
     El post se genera inmediatamente y luego puede programarse para publicación futura.
     """
-    from Services.post_service import ImageService
-    
     if len(imagenes_productos) < 1 or len(imagenes_productos) > 4:
         raise HTTPException(
             status_code=400,
