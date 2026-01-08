@@ -37,9 +37,14 @@ class EstadoPost(str, enum.Enum):
 
 
 class TipoVersion(str, enum.Enum):
-    """Tipo de versión del post"""
-    ORIGINAL = "original"           # Primera generación
-    REGENERACION = "regeneracion"   # Regeneración completa (diseño nuevo)
-    EDICION = "edicion"             # Edición puntual (cambios específicos)
-    VARIANTE = "variante"           # Variante (reference vs creative)
+    """
+    Tipo de versión del post.
+    
+    IMPORTANTE: Los valores deben coincidir EXACTAMENTE con el enum de la base de datos.
+    La base de datos usa valores en inglés en mayúsculas.
+    """
+    ORIGINAL = "ORIGINAL"           # Primera generación
+    REGENERATION = "REGENERATION"   # Regeneración completa (diseño nuevo)
+    EDIT = "EDIT"                   # Edición puntual (cambios específicos)
+    VARIANT = "VARIANT"             # Variante (reference vs creative)
 

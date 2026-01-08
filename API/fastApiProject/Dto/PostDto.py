@@ -38,10 +38,14 @@ class EstadoPostEnum(str, Enum):
 
 
 class TipoVersionEnum(str, Enum):
-    ORIGINAL = "original"
-    REGENERACION = "regeneracion"
-    EDICION = "edicion"
-    VARIANTE = "variante"
+    """
+    IMPORTANTE: Los valores deben coincidir EXACTAMENTE con el enum de la base de datos.
+    La base de datos usa valores en inglés en mayúsculas.
+    """
+    ORIGINAL = "ORIGINAL"
+    REGENERATION = "REGENERATION"
+    EDIT = "EDIT"
+    VARIANT = "VARIANT"
 
 
 # ============================================================================

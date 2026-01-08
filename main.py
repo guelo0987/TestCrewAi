@@ -1321,11 +1321,11 @@ if __name__ == "__main__":
     # ================================================================
     # 7. EDITAR un post existente (cambios específicos):
     # ================================================================
-    # result = ai.edit(
-    #     existing_post="posts/post_v8.png",
-    #     changes="Mueve el logo a la esquina inferior derecha",
-    #     output="posts/post_edited.png"
-    # )
+    result = ai.edit(
+        existing_post="fotos/navidad.png",
+        changes="El titulo necesito que lo bajes lo quiero mas en el medio",
+        output="posts/post_edited_navidad01.png"
+    )
     # 
     # Más ejemplos de ediciones:
     # - "Cambia el color del fondo a azul oscuro"

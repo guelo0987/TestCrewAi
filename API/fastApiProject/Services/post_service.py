@@ -796,7 +796,7 @@ Use a DIFFERENT background, DIFFERENT layout structure, DIFFERENT visual approac
             # ✅ ABRIR TRANSACCIÓN SOLO PARA GUARDAR
             version = VersionPost(
                 post_id=post_id, version_padre_id=version_base_id_saved,
-                numero_version=next_version, tipo_version=TipoVersion.REGENERACION,
+                numero_version=next_version, tipo_version=TipoVersion.REGENERATION,
                 imagen_url=img_url, cambios_solicitados=feedback
             )
             db.add(version)
@@ -829,13 +829,23 @@ Use a DIFFERENT background, DIFFERENT layout structure, DIFFERENT visual approac
         
         # 1. Obtener versión base (operación rápida)
         if version_base_id:
+            # Si se especifica una versión, usar esa específica
             version_base = db.query(VersionPost).filter(
                 VersionPost.id == version_base_id, VersionPost.post_id == post.id
             ).first()
         else:
+            # ✅ Buscar la última versión EDIT primero
+            # Si no hay ninguna EDIT, entonces usar la última versión en general
             version_base = db.query(VersionPost).filter(
-                VersionPost.post_id == post.id
+                VersionPost.post_id == post.id,
+                VersionPost.tipo_version == TipoVersion.EDIT  # Buscar solo versiones EDIT
             ).order_by(VersionPost.numero_version.desc()).first()
+            
+            # Si no hay ninguna versión EDIT, usar la última versión en general
+            if not version_base:
+                version_base = db.query(VersionPost).filter(
+                    VersionPost.post_id == post.id
+                ).order_by(VersionPost.numero_version.desc()).first()
         
         if not version_base or not version_base.imagen_url:
             return {"status": "error", "mensaje": "No se encontró versión para editar"}
@@ -907,7 +917,7 @@ This is the company logo. Use it ONLY if the edit requires moving or resizing th
             # ✅ ABRIR TRANSACCIÓN SOLO PARA GUARDAR
             version = VersionPost(
                 post_id=post_id, version_padre_id=version_base_id_saved,
-                numero_version=next_version, tipo_version=TipoVersion.EDICION,
+                numero_version=next_version, tipo_version=TipoVersion.EDIT,
                 imagen_url=img_url, cambios_solicitados=cambios
             )
             db.add(version)
