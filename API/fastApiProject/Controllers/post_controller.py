@@ -2,7 +2,7 @@
 Controller para el sistema de generación de posts
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Body
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
@@ -262,7 +262,7 @@ async def crear_post_scratch(
 async def regenerar_post(
     empresa_id: UUID,
     post_id: UUID,
-    datos: PostRegenerateRequest,
+    datos: Optional[PostRegenerateRequest] = Body(None),
     version_base_id: Optional[UUID] = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
@@ -272,15 +272,19 @@ async def regenerar_post(
     
     Usar cuando el diseño no gustó y se quiere algo diferente.
     Opcionalmente especifica `version_base_id` para regenerar desde una versión específica.
+    El feedback es completamente opcional - puedes enviar un body vacío o sin body.
     """
     empresa = get_empresa_or_404(db, empresa_id)
     post = get_post_or_404(db, post_id, empresa_id)
+    
+    # Si no se proporciona datos, usar feedback vacío
+    feedback = datos.feedback if datos and datos.feedback else ""
     
     result = await post_service.regenerate_post(
         db=db,
         post=post,
         empresa=empresa,
-        feedback=datos.feedback,
+        feedback=feedback,
         version_base_id=version_base_id
     )
     
